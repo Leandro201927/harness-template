@@ -9,12 +9,13 @@ next session can continue without guessing.
 Before writing code:
 
 1. Confirm the working directory with `pwd`.
-2. Read [progress](./agent/state/progress.md) for the latest verified state and next step.
-3. Read [feature_list](./agent/state/feature_list.json) and choose the highest-priority unfinished feature.
-4. Review recent commits with `git log --oneline -5`.
-5. Run `./agent/verification/init.sh`.
-6. If baseline verification is already failing, fix that first. Do not stack new feature work on top of a broken starting state. If all is working, continue with the next step.
-7. Read [session-handoff](./agent/state/session-handoff.md) if it indicates a prior session ended without completion, start from the continuation context it provides, otherwise treat it as an empty or no-handoff marker.
+2. Read [session-handoff](./agent/state/session-handoff.md) if it indicates a prior session ended without completion, start from the continuation context it provides, otherwise treat it as an empty or no-handoff marker.
+3. Read [progress](./agent/state/progress.md) for the latest verified state and next step.
+4. Read [feature_list](./agent/state/feature_list.json) and choose the highest-priority unfinished feature.
+5. Review recent commits with `git log --oneline -5`.
+6. Run `./agent/verification/init.sh`.
+
+If baseline verification is already failing, fix that first. Do not stack new feature work on top of a broken starting state.
 
 
 ## Working Rules

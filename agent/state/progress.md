@@ -1,17 +1,17 @@
 ## Current Verified State
 
-- Repository root: `/Users/leandro/Documents/projects/harness-template`
+- Repository root:
 - Standard startup path: `bash ./agent/verification/init.sh`
 - Standard verification path:
   1. `bash ./agent/verification/check-architecture.sh`
   2. `bash ./agent/verification/e2e-check.sh`
-- Current highest-priority unfinished feature: `feature-001`
-- Current blocker: none
-- Current progress: `not_started`
+- Current highest-priority unfinished feature: `feature-XXX`
+- Current blocker: 
+- Current progress:
 
-#### Session Log
+#### Last 5 Session Logs
 
-### Session 01
+### Session XX
 
 - Date:
 - Goal:

@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 # Setup phase
@@ -14,10 +14,10 @@ echo "==> Syncing dependencies"
 
 # Verification phase
 echo "==> Running end-to-end verification"
-bash scripts/e2e-check.sh
+bash agent/verification/e2e-check.sh
 
 echo "==> Running architecture verification"
-bash scripts/check-architecture.sh
+bash agent/verification/check-architecture.sh
 
 # Startup phase
 # RUN_START_COMMAND=1

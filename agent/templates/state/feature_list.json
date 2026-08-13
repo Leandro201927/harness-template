@@ -10,14 +10,14 @@
     {
       "id": "feature-001",
       "priority": 1,
-      "area": "example",
-      "title": "Example feature",
-      "user_visible_behavior": "A user can click Example Feature.",
+      "area": "example_area",
+      "title": "First feature",
+      "user_visible_behavior": "A user can click First Feature.",
       "status": "not_started",
       "verification": [
         "Open the app.",
-        "Click Example Feature.",
-        "Verify Example Feature is clicked."
+        "Click First Feature.",
+        "Verify First Feature is clicked."
       ],
       "session_ids": ["2026-08-12-123456"]
     }
