@@ -28,6 +28,9 @@ If baseline verification is already failing, fix that first. Do not stack new fe
 - Before implementing, at minimum read: architecture, product, reliability, the active feature doc (if one exists under ./agent/docs/features/* ), and any other doc referenced by the active feature's verification field.
 - Respect the structure (do not add/delete sections) of each required `.md` artifact if will be updated.
 - Do not change any file coming from the [templates](./agent/templates) directory.
+- Feature task plans live ONLY in `./agent/docs/features/feature-XXX.md` under the `## Implementation Tasks (Dynamic)` section. Never inside `feature_list.json`.
+- Every feature must have a task plan, the task plan must be followed when implementing.
+- Do not delete any task plan under the `## Implementation Tasks (Dynamic)` section coming from `./agent/docs/features/`.
 
 
 ## Required Artifacts
@@ -35,6 +38,7 @@ If baseline verification is already failing, fix that first. Do not stack new fe
 - `./agent/docs/architecture.md`: documentation for the system architecture
 - `./agent/docs/product.md`: documentation for the system product
 - `./agent/docs/reliability.md`: documentation for how the system proves it is healthy and restartable
+- Feature docs under `./agent/docs/features/` include a runtime-editable `Implementation Tasks (Dynamic)` table; this is the only authoritative task list for the feature.
 - `./agent/state/logs/session-log-${id}.md`: session log with critical decisions, verification run, evidence captured, commits, files or artifacts updated, known risk or unresolved issue
 - `./agent/state/clean-state-checklist.md`: checklist for cleaning the repository state after a session ends
 - `./agent/state/feature_list.json`: source of truth for feature state and priority
@@ -48,6 +52,8 @@ If baseline verification is already failing, fix that first. Do not stack new fe
 ## Semantics Of State Artifacts
 
 - [feature_list](./agent/state/feature_list.json) is the source of truth for feature status and priority.
+   - [features](./agent/docs/features/*) directory contains the feature docs, each one per feature.
+   - [feature-XXX.md](./agent/docs/features/feature-XXX.md) is the feature doc for feature `XXX`. It contains a `## Implementation Tasks (Dynamic)` section.
 - [progress](./agent/state/progress.md) is a short startup snapshot and a rolling index of the last 5 sessions only.
   It must not duplicate the full feature list, and it must not contain the full text of session logs.
   When the 5-session window is exceeded, remove the oldest entry from the index in [progress](./agent/state/progress.md);

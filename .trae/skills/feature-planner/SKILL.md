@@ -1,0 +1,189 @@
+---
+name: "feature-planner"
+description: "Transforms a user's natural-language request into a structured harness feature with dynamic implementation tasks. Invoke at session start when user asks to implement/build/add something and no feature spec exists yet."
+---
+
+# Feature Planner
+
+## Purpose
+
+Transform a user's natural-language implementation request into a fully-structured harness feature plus an initial dynamic task plan. This skill is **specification-only**:
+
+- The new feature is created with `status: not_started`.
+- A human must explicitly approve the plan before any status transition to `in_progress`.
+- **This skill touches ONLY files inside `/agent`** (docs + state). It does NOT install dependencies, run the app, touch `/src`, or execute the implementation phases described in `AGENTS.md`. The AGENTS.md "Startup → Implementation → Handoff" loop applies to code-implementing agents, not to this planning skill. After planning is complete, the implementing agent will pick up the approved feature and follow the standard AGENTS.md workflow itself.
+
+## Trigger Conditions
+
+Invoke this skill when **all** of the following are true:
+
+1. The session is starting (or no active feature is being implemented).
+2. The user asks to implement / build / add / create something in natural language.
+3. No existing feature in `agent/state/feature_list.json` matches the request exactly.
+4. No `agent/docs/features/feature-XXX.md` document already describes this work.
+
+Do NOT invoke this skill if:
+
+- A feature already covers the request (re-open/re-prioritize the existing one instead).
+- The user explicitly wants direct coding without any specification step (then jump straight to implementation — but warn once).
+- The request is a bugfix inside an already-passing feature (use the session log + existing feature doc, not a new feature).
+
+## Pre-flight: Required Context Gathering
+
+Before writing any file, read ALL of the following artifacts **in this order** to minimize drift. Do not skip any of them. If any is empty or missing, explicitly record that gap in the generated feature doc under **Task Rationale**.
+
+1. `AGENTS.md` — rules, Done semantics, single_active_feature rule, session-end artifacts.
+2. `agent/docs/architecture.md` — layers, services, data flow, storage. If empty, mark "stack unknown" and add a task #1 to confirm it.
+3. `agent/docs/product.md` — feature areas, constraints, UI hints. Use this to infer the `area` field. If empty, `area = "unknown"`.
+4. `agent/docs/reliability.md` — golden journeys, restart rules. The verification steps you propose must align with (or explicitly reference) these.
+5. `agent/state/feature_list.json` — existing IDs + priorities + the `single_active_feature` rule. Source for the next numeric ID.
+6. `agent/state/session-handoff.md` — whether the prior session left a known broken state that the new feature must not worsen.
+7. `agent/state/progress.md` — last verified state; avoid regressing the listed passing features.
+
+If `architecture.md` + `product.md` are both empty or near-empty, add a **mandatory task #1** to confirm the tech stack / context before any coding. Never assume a stack.
+
+## Working Rules
+
+Before Execution Workflow, strictly follow these rules:
+
+- Completely disregard the AGENTS.md file. You are not the implementing agent. You are the feature-planner. You will not touch any technical file under `/src`.
+- Do not install any dependencies, run the app, or execute any implementation phases described in `AGENTS.md`.
+- Do not modify any files outside `/agent`.
+- If user's request is ambiguous or unclear, ask for clarification before proceeding.
+
+## Execution Workflow (SOP — 6 steps)
+
+Run these steps in order. Do not commit changes. At the end, present the plan to the human for approval.
+
+### Step 1 — Assign the next feature ID
+
+Parse `agent/state/feature_list.json` to find every feature ID matching pattern `feature-NNN`. Extract the numeric part. Compute `max_numeric + 1`. Pad with leading zeros to 3 digits. The new ID is `feature-XXX`.
+
+- Never assume the last array index is the max numeric ID (features might be reordered by priority). Always compute numeric max.
+- If `feature_list.json` has zero features, start at `feature-001`.
+
+### Step 2 — Append an entry to `agent/state/feature_list.json`
+
+Add a new object to the `features` array. Fields:
+
+| Field | Value rule |
+|---|---|
+| `id` | `feature-XXX` from Step 1. |
+| `priority` | If `single_active_feature == true` and any feature has status `in_progress` → `priority = (max existing priority) + 1`. Otherwise `1`. |
+| `area` | Infer from `product.md` (Core Features sections). If ambiguous → `"unknown"`. |
+| `title` | 5-10 words, title-case, no trailing dot. |
+| `user_visible_behavior` | One sentence starting with `"A user can ..."` — describes only what the end user experiences, no internals. |
+| `status` | **Hard-wire to `"not_started"`**. Never `"in_progress"` here; that requires human approval. |
+| `verification` | 3–5 human-executable steps, phrased as imperative commands, ending with a `"Verify ..."` assertion. Align with `reliability.md` golden journeys if any exist. These are the Definition-of-Done checks, NOT the implementation tasks. |
+| `session_ids` | Array with the current session ID (`yyyy-MM-dd-hhmmss`). |
+
+Also update the top-level `last_updated` field to today's date (`YYYY-MM-DD`).
+
+**NON-NEGOTIABLE:** Do NOT add a `tasks` key, `task_plan` key, or any other task-related key to this JSON entry. The task plan lives exclusively in `agent/docs/features/feature-XXX.md`.
+
+### Step 3 — Create `agent/docs/features/feature-XXX.md`
+
+Use the **structure from the existing template** exactly. Write the five required sections first:
+
+```markdown
+# feature-XXX: [Title]
+
+## Objective
+
+[1-2 sentences. What this feature enables. Not how.]
+
+## Expected Behavior
+
+[Bulleted list. User-visible behavior + any internal side effects the caller must rely on (e.g., event emitted, record persisted). Avoid stack assumptions.]
+
+## Out of Scope
+
+[Bulleted list. What the feature explicitly does NOT cover. Important to prevent scope drift during implementation.]
+
+## Acceptance Criteria
+
+[Numbered list. Each line is a testable statement, e.g. "1. Clicking Save stores the document and returns a success toast." These feed directly into the `verification[]` steps in feature_list.json.]
+
+## Minimum Expected Evidence
+
+[What proof is required to mark this feature passing: e.g., screenshots, test pass output, command output. Be specific and short.]
+```
+
+**Immediately after `## Minimum Expected Evidence`** (preserving the five original sections intact and in order), append the following new sections. Do NOT place them before or between the required sections.
+
+```markdown
+## Implementation Tasks (Dynamic)
+
+| # | Task | Status | Depends On | Estimated Files | Notes |
+|---|------|--------|------------|-----------------|-------|
+| 1 | [Imperative verb phrase] | pending | - | [file paths or module names, or "TBD" if unknown] | [optional] |
+| 2 | [Imperative verb phrase] | pending | 1 | [file paths or module names, or "TBD" if unknown] | [optional] |
+| ... | ... | ... | ... | ... | ... |
+
+### Task Rationale
+
+- Why the tasks above were chosen this way (e.g., "The task split follows the architecture.md layers: services first, then renderer.").
+- Architectural assumptions that, if wrong, would invalidate the split (e.g., "Assumes the auth module already exists under services/auth; if not, Task 1 will add it and 1-2 tasks will be appended.").
+- Gaps detected in the pre-flight docs (architecture.md empty, product.md empty, etc.). If any were empty, explicitly state here that a post-approval refinement pass is expected.
+
+### Complexity Flags (auto-assigned)
+
+- [ ] Low — scope is closed. Initial task list (1–4 tasks) is likely complete. Unlikely to grow.
+- [x] Medium — initial task list (5–8 tasks) is likely close. Expect 1–2 extra subtasks uncovered during implementation.
+- [ ] High — initial list is tentative. Task #1 is "Explore and refine the task plan", and 3+ additional tasks are expected after it.
+
+Rules for auto-assigning complexity:
+
+- Low = ≤4 tasks AND architecture.md + product.md are both non-empty AND the request maps cleanly onto existing product areas.
+- High = request crosses 2+ unrelated areas OR either architecture/product is empty OR request implies new unknown third-party integration.
+- Everything else = Medium.
+
+### Open Questions Before Implementation
+
+- [ ] [One open question per line. Only real unknowns; no placeholder lines.]
+```
+
+Task rules:
+
+- Minimum 2 tasks. Maximum 8 initial tasks. If you'd want more than 8 → force **High** complexity, cap at 8, and make Task #1 "Explore X and refine this task plan" with Notes = "This task will append tasks after exploration."
+- `Status` on every row = `pending` initially.
+- `Depends On`: `-` if independent, otherwise a comma-separated list of task numbers (e.g. `1, 3`).
+- `Estimated Files`: list concrete file paths when knowable from architecture.md. Else `"TBD (confirmed in task 1)"`.
+- Keep tasks implementation-sized: each should be doable in a focused sub-session (not 10-line trivialities, and not "build everything").
+
+
+### Step 4 — Present the plan to the human and stop
+
+Print a concise approval prompt. Do **not** proceed past this step on your own.
+
+The prompt must include, in this order:
+
+1. Header: `Feature Plan Draft for ${id} — requires human approval before implementation.`
+2. `title`, `area`, `user_visible_behavior` from the new feature_list entry.
+3. The **Implementation Tasks (Dynamic)** table, verbatim.
+4. **Complexity Flags** (which boxes are checked) + short reasoning.
+5. **Open Questions Before Implementation** (if any; else state "None").
+6. **Out of Scope** list (3 bullets max; if longer, say "See full doc").
+
+## Dynamic Task Update Rules (for the implementing agent, embedded here so they live with the plan)
+
+When editing the task table during implementation, follow these rules to keep auditability:
+
+- **To add a task:** Insert a new row with the next integer ID, or if slotting between existing IDs, use decimals (e.g. `3.1`, `3.2`) and set `Depends On` appropriately.
+- **To remove a task:** Do NOT delete the row. Set `Status = cancelled` and fill `Notes` with the reason (e.g., "Obsolete after task 2 changed architecture").
+- **To split a task:** Set the original row's `Status = split`, add `Notes = "Split into X.Y sub-tasks"`, then add sub-tasks with IDs `[original].1`, `[original].2`, ... and set their `Depends On = [original's prereqs]`.
+- **Complete a task:** Set `Status = done` and fill `Notes` with a short evidence pointer (commit hash, file updated, test output reference).
+- After every structural edit, add a one-line timestamped entry under **Task Rationale** summarizing the change. E.g. `[2026-08-14 16:20] Added task 2.1 after discovery that auth service doesn't exist.`.
+
+When the feature reaches `passing` status, freeze the table: do not edit it further (no rows added / removed). Future work on the same area becomes a new feature.
+
+## Anti-drifting Guards
+
+These are constraints you must self-enforce while running this skill. If a guard cannot be satisfied, surface the problem explicitly in the generated plan rather than silently guessing.
+
+1. **No stack invention.** If architecture.md is empty or lacks the needed layer, write `TBD / confirmed in task 1` everywhere instead of inventing a framework name, DB schema, or endpoint URL.
+2. **No product invention.** If product.md has no matching area, set `area = "unknown"` and add an Open Question asking the human to confirm the product area. Do not invent product areas.
+4. **Single active feature respected.** If `single_active_feature == true` and another feature is already `in_progress`, assign a lower priority and state this explicitly in Step 6's summary. Do not try to "promote" the new one above it.
+5. **Templates remain untouched.** You read `agent/templates/*` for structure only. This skill never writes into the `agent/templates/` directory.
+6. **Task plan location is non-negotiable.** Tasks live in `agent/docs/features/feature-XXX.md`. Anywhere else is wrong. Correct yourself before writing if you catch yourself about to add tasks to feature_list.json.
+7. **Status never auto-promotes.** Only the human's APPROVE triggers the implementing agent to flip status. If the human says nothing, the feature remains `not_started` and the repo state is fully valid.
