@@ -7,14 +7,15 @@ state where the next session can continue without guessing.
 > **IMPORTANT — READ THIS FIRST:**
 > This file is an **instruction routing map** and a holder for shared,
 > role-independent rules and semantics. It does **NOT** contain operational
-> implementation workflows and it does **NOT** contain feature-planning workflows.
-> Those live in dedicated skills.
+> implementation workflows, feature-planning workflows, **nor bootstrap/scaffolding
+> workflows**. Those live in dedicated skills.
 >
-> - For the planning/specification workflow → see the `feature-planner` skill.
-> - For the Startup→Implementation→Handoff workflow → see the `implementor` skill.
+> - To start a brand-new project via official CLIs (scaffolding inside `./src`) → see the `bootstraper` skill.
+> - For the planning/specification workflow on an existing project → see the `feature-planner` skill.
+> - For the Startup→Implementation→Handoff workflow on an approved feature → see the `implementor` skill.
 >
 > Reading this file for operational implementation
-> (Startup / Definition of Done / End of Session) is WRONG for both roles.
+> (Startup / Definition of Done / End of Session) is WRONG for every role.
 > Those live in the `implementor` skill.
 
 ## 1. Instruction Routing Map
@@ -22,41 +23,54 @@ state where the next session can continue without guessing.
 ```
 User Request ──┐
                │
-               ▼
+               │ Contains keyword "bootstrap"?
+               │
+               ├── YES ────────────────────────────────────────────┐
+               │                                                    ▼
+               │                                  ┌──────────────────────────────────────────┐
+               │                                  │  bootstraper SKILL                        │ IF: new project, keyword "bootstrap" present,
+               │                                  │  [bootstraper/SKILL.md]                   │     user confirms ./src overwrite if needed.
+               │                                  └──────────────────┬────────────────────────┘ PRODUCES: scaffolded empty baseline under ./src
+               │                                                     │                           + writes/updates agent/docs/security.md
+               │                                                     │  FINAL STATE: ./src ready, this pass ENDS HERE.
+               │                                                     │  Do NOT continue into feature work in the same pass.
+               │                                                     │
+               ▼  NO "bootstrap" keyword (standard harness path)
    ┌──────────────────────────────────────────┐
-   │  feature-planner SKILL             │  IF: new implementation request,    │
-   │  [feature-planner/SKILL.md]          │      no existing feature matches.      │
-   └──────────────────┬───────────────────────┘  PRODUCES: feature-XXX.md +          │
-                  │                          feature_list.json entry             │
-                  │                          FINAL STATE: status = not_started                     │
-                  │                                                        │
-                  ▼  HUMAN APPROVAL  (REQUIRED — explicit approval to proceed)  │
+   │  feature-planner SKILL                   │  IF: new implementation request,
+   │  [feature-planner/SKILL.md]              │      no existing feature matches.
+   └──────────────────┬───────────────────────┘  PRODUCES: feature-XXX.md +
+                      │                          feature_list.json entry
+                      │                          FINAL STATE: status = not_started
+                      │
+                      ▼  HUMAN APPROVAL  (REQUIRED — explicit approval to proceed)
    ┌──────────────────────────────────────────┐
-   │  implementor SKILL                   │  IF: feature approved,               │
-   │  [implementor/SKILL.md]          │      status = in_progress          │
-   └──────────────────┬───────────────────────┘  EXECUTES: Ralph loop v0.1        │
-                  │                          (Baseline → Implementation → Handoff)    │
-                  │                          FINAL STATE: status = passing              │
-                  │                                                        │
-                  ▼
-        Baseline Verifications
-        (agent/verification/init.sh
-         → check-architecture.sh
-         → e2e-check.sh)
+   │  implementor SKILL                       │  IF: feature approved,
+   │  [implementor/SKILL.md]                  │      status = in_progress
+   └──────────────────┬───────────────────────┘  EXECUTES: Ralph loop v0.1
+                      │                          (Baseline → Implementation → Handoff)
+                      │                          FINAL STATE: status = passing
+                      │
+                      ▼
+            Baseline Verifications
+            (agent/verification/init.sh
+             → check-architecture.sh
+             → e2e-check.sh)
 ```
 
 ## 2. Instruction Routing Table (Explicit)
 
 | Operation                                                       | Role        | Routing Path                                                                                                                             |
 | --------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Plan a new feature, write the spec, write the task plan         | Planner     | [.trae/skills/feature-planner/SKILL.md](./.trae/skills/feature-planner/SKILL.md) |
-| Execute the Ralph loop: Startup → Implementation → Handoff      | Implementor | [.trae/skills/implementor/SKILL.md](./.trae/skills/implementor/SKILL.md)         |
-| Define artifact semantics, shared rules, structure requirements | Both roles  | This file — AGENTS.md (sections below)                                                                                                   |
-| Validate repository health via scripts                          | Both roles  | `agent/verification/init.sh`                                                                                                             |
+| **Bootstrap a brand new project via OFFICIAL framework CLIs (empty scaffolding) inside `./src`** | Bootstraper | [.trae/skills/bootstraper/SKILL.md](./.trae/skills/bootstraper/SKILL.md)                                                                 |
+| Plan a new feature, write the spec, write the task plan         | Planner     | [.trae/skills/feature-planner/SKILL.md](./.trae/skills/feature-planner/SKILL.md)                                                         |
+| Execute the Ralph loop: Startup → Implementation → Handoff      | Implementor | [.trae/skills/implementor/SKILL.md](./.trae/skills/implementor/SKILL.md)                                                                 |
+| Define artifact semantics, shared rules, structure requirements | All roles   | This file — AGENTS.md (sections below)                                                                                                   |
+| Validate repository health via scripts                          | All roles   | `agent/verification/init.sh`                                                                                                             |
 
-## 3. Transversal Working Rules (Shared by Both Roles)
+## 3. Transversal Working Rules (Shared by All Roles)
 
-These rules apply equally to the planner and to the implementor.
+These rules apply equally to the bootstraper, the planner, and the implementor.
 
 - Work on **one feature at a time** at the repository level.
 - Respect the structure (do **not** add or delete sections) of each required `.md` artifact if you will update it. Fill within the existing templates.
@@ -66,24 +80,29 @@ These rules apply equally to the planner and to the implementor.
 
 ## 4. Global Anti-Drifting Guards
 
-These are constraints that every agent (planner or implementor) must self-enforce. If a guard cannot be satisfied, surface the problem explicitly rather than silently guessing.
+These are constraints that every agent (bootstraper, planner, or implementor) must self-enforce. If a guard cannot be satisfied, surface the problem explicitly rather than silently guessing.
 
 1. **Planners do NOT invent implementation content.**
    If you are the planner role, do NOT invent implementation execution, write code, install dependencies, or run the app. That is the implementor's responsibility.
 2. **Implementors do NOT invent specs.**
    If you are the implementor role, do NOT invent a new feature spec, re-scope, or rewrite the Acceptance Criteria of the active feature. The planner and the human are the authorities on scope.
-3. **Single source of truth for status.**
-   `agent/state/feature_list.json` is the only source of truth for feature status and priority. Do not change status without the corresponding trigger (human approval for not\_started → in\_progress, Definition of Done passing for in\_progress → passing).
-4. **Templates remain untouched.**
+3. **Bootstrappers do NOT implement business features.**
+   If you are the bootstraper role, do NOT implement business logic, custom endpoints, or feature views beyond the empty framework scaffold. After the bootstrap report, END THE PASS and route any follow-up feature work through `feature-planner → implementor`.
+4. **Single source of truth for status.**
+   `agent/state/feature_list.json` is the only source of truth for feature status and priority. Do not change status without the corresponding trigger (human approval for not_started → in_progress, Definition of Done passing for in_progress → passing).
+5. **Templates remain untouched.**
    Read `agent/templates/*` for structure only. Never write into the `agent/templates/` directory.
+6. **Only bootstraper and implementor may touch `agent/docs/security.md`.**
+   `feature-planner` never writes to the security artifact. It is the single source of truth for applied controls, written during scaffolding and updated when security-relevant implementation changes occur.
 
 ## 5. Required Artifacts
 
-These artifacts define the system of record. Both roles must know them, update them as required, and never bypass them.
+These artifacts define the system of record. All roles must know them, update them as required, and never bypass them.
 
 - `./agent/docs/architecture.md`: documentation for the system architecture
 - `./agent/docs/product.md`: documentation for the system product
 - `./agent/docs/reliability.md`: documentation for how the system proves it is healthy and restartable
+- `./agent/docs/security.md`: documentation for all security controls, minimum bar, and decisions. Updated ONLY by the `bootstraper` and `implementor` skills.
 - Feature docs under `./agent/docs/features/` include a runtime-editable `Implementation Tasks (Dynamic)` table; this is the only authoritative task list for the feature.
 - `./agent/state/logs/session-log-${id}.md`: session log with critical decisions, verification run, evidence captured, commits, files or artifacts updated, known risk or unresolved issue
 - `./agent/state/clean-state-checklist.md`: checklist for cleaning the repository state after a session ends
@@ -122,12 +141,12 @@ The following Required Artifacts should follow the structure template. Use it as
 
 - [clean-state-checklist](./agent/state/clean-state-checklist.md)
   - Template: [clean-state-checklist.md](./agent/templates/state/clean-state-checklist.md)
-- [feature\_list](./agent/state/feature_list.json)
-  - Template: [feature\_list.json](./agent/templates/state/feature_list.json)
+- [feature_list](./agent/state/feature_list.json)
+  - Template: [feature_list.json](./agent/templates/state/feature_list.json)
   - Each feature should have `id`, `priority`, `area`, `title`, `user_visible_behavior`, `status`, `verification`, and `session_ids` fields.
   - `status` field should be one of:
-    - not\_started: Work has not begun
-    - in\_progress: The feature is the current active task
+    - not_started: Work has not begun
+    - in_progress: The feature is the current active task
     - blocked: Work cannot continue until a documented blocker is resolved
     - passing: Required verification has passed and evidence is recorded
   - `session_ids` field should be an array of strings, each string is a session ID (`yyyy-MM-dd-hhmmss`).
@@ -136,4 +155,13 @@ The following Required Artifacts should follow the structure template. Use it as
   - Template: [progress.md](./agent/templates/state/progress.md)
 - [session-handoff](./agent/state/session-handoff.md)
   - Template: [session-handoff.md](./agent/templates/state/session-handoff.md)
+- [architecture](./agent/docs/architecture.md)
+  - Template: [architecture.md](./agent/templates/docs/architecture.md)
+- [product](./agent/docs/product.md)
+  - Template: [product.md](./agent/templates/docs/product.md)
+- [reliability](./agent/docs/reliability.md)
+  - Template: [reliability.md](./agent/templates/docs/reliability.md)
+- [security](./agent/docs/security.md)
+  - Template: [security.md](./agent/templates/docs/security.md)
+  - Updated **ONLY** by `bootstraper` and `implementor`. The `feature-planner` skill must not write to this artifact.
 
