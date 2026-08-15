@@ -11,7 +11,7 @@ Transform a user's natural-language implementation request into a fully-structur
 
 - The new feature is created with `status: not_started`.
 - A human must explicitly approve the plan before any status transition to `in_progress`.
-- **This skill touches ONLY files inside `/agent`** (docs + state). It does NOT install dependencies, run the app, touch `/src`, or execute the implementation phases described in `AGENTS.md`. The AGENTS.md "Startup → Implementation → Handoff" loop applies to code-implementing agents, not to this planning skill. After planning is complete, the implementing agent will pick up the approved feature and follow the standard AGENTS.md workflow itself.
+- **This skill touches ONLY files inside `/agent`** (docs + state). It does NOT install dependencies, run the app, or touch `/src`. The "Startup → Implementation → Handoff" loop lives in the `implementor` skill at [implementor/SKILL.md](./.trae/skills/implementor/SKILL.md), not in AGENTS.md and not in this planning skill. After planning is complete and the human approves, the implementing agent (via the `implementor` skill) will pick up the approved feature and execute that workflow.
 
 ## Trigger Conditions
 
@@ -32,7 +32,7 @@ Do NOT invoke this skill if:
 
 Before writing any file, read ALL of the following artifacts **in this order** to minimize drift. Do not skip any of them. If any is empty or missing, explicitly record that gap in the generated feature doc under **Task Rationale**.
 
-1. `AGENTS.md` — rules, Done semantics, single_active_feature rule, session-end artifacts.
+1. `AGENTS.md` — shared rules only: routing map, artifact semantics, required structure, global anti-drifting guards. Ignore the skill routing table for your role; you are the planner.
 2. `agent/docs/architecture.md` — layers, services, data flow, storage. If empty, mark "stack unknown" and add a task #1 to confirm it.
 3. `agent/docs/product.md` — feature areas, constraints, UI hints. Use this to infer the `area` field. If empty, `area = "unknown"`.
 4. `agent/docs/reliability.md` — golden journeys, restart rules. The verification steps you propose must align with (or explicitly reference) these.
@@ -46,8 +46,8 @@ If `architecture.md` + `product.md` are both empty or near-empty, add a **mandat
 
 Before Execution Workflow, strictly follow these rules:
 
-- Completely disregard the AGENTS.md file. You are not the implementing agent. You are the feature-planner. You will not touch any technical file under `/src`.
-- Do not install any dependencies, run the app, or execute any implementation phases described in `AGENTS.md`.
+- Read AGENTS.md for shared rules, artifact semantics, routing map, and required structure only. AGENTS.md no longer contains implementation workflows.
+- This skill touches ONLY files inside `/agent` (docs + state). It does NOT install dependencies, run the app, or touch `/src`. The implementation workflow lives in the `implementor` skill, not in this one.
 - Do not modify any files outside `/agent`.
 - If user's request is ambiguous or unclear, ask for clarification before proceeding.
 

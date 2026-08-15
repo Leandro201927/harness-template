@@ -13,7 +13,7 @@
 
 Opening this repository for the first time must start in the same place:
 
-👉 **[AGENTS.md](file:///Users/leandro/Documents/projects/harness-template/AGENTS.md)** 👈
+👉 **[AGENTS.md](./AGENTS.md)** 👈
 
 ## You HUMAN, not agent:
 
