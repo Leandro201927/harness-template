@@ -1,2 +1,3 @@
 .trae/documents/
 .src/
+**/node_modules/

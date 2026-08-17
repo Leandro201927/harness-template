@@ -1,6 +1,6 @@
 ---
 name: "bootstraper"
-description: "Bootstraps a brand new project (web/fullstack/frontend-only/backend-only) inside ./src via OFFICIAL framework CLIs — never writes boilerplate by hand. Triggers when user message begins with or contains the 'bootstrap' keyword."
+description: "Bootstraps a brand new project (web/fullstack/frontend-only/backend-only) inside ./src via OFFICIAL framework CLIs — never writes boilerplate by hand. Executes all CLI commands through the mcp-cli-navigator MCP (PTY-based, turn-based) since most scaffolding CLIs present interactive menus. Triggers when user message begins with or contains the 'bootstrap' keyword."
 ---
 
 # Bootstraper Skill
@@ -22,6 +22,35 @@ Guiding principle: **DO NOT REINVENT BOILERPLATE.**
 This skill **NEVER** implements business features in the same pass. That is the `implementor` skill's job at [implementor/SKILL.md](file:///Users/leandro/Documents/projects/harness-template/.trae/skills/implementor/SKILL.md).
 This skill **NEVER** plans or specs features. That is the `feature-planner` skill's job at [feature-planner/SKILL.md](file:///Users/leandro/Documents/projects/harness-template/.trae/skills/feature-planner/SKILL.md).
 This skill **writes and updates** `agent/docs/security.md` as the single source of truth for applied security controls.
+
+## MCP Requirement — mcp-cli-navigator (mandatory for ALL CLI execution)
+
+**Every** command this skill runs against a terminal — scaffold commands, plugin/testing installs, validation boots, everything in Steps A/C/E — MUST go through the `mcp-cli-navigator` MCP tools, never through a raw shell/bash tool.
+
+Reasoning: the large majority of official scaffold commands (`npm create vite@latest`, `ng new`, `npx create-next-app`, `sam init`, `create-t3-app`, etc.) present interactive prompts (project name, TS vs JS, ESLint, router, etc.). Rather than spending effort classifying "this command is interactive / this one isn't" case by case, this skill treats **all** CLI execution as potentially interactive and always drives it through the PTY-based navigator. A non-interactive command just means the session ends after `start_cli_session` with no `send_key` calls needed — there's no cost to defaulting to the navigator.
+
+Available tools and how to use them in this skill:
+
+- **`start_cli_session({ command, args, cwd })`** — Launches the command. `command` must be one of the officially allowlisted binaries (npm, npx, yarn, pnpm, bun, uv, pip, poetry, cargo, go, git, ng, django-admin, python, composer, symfony, rails, sam, cdk, spring, etc.). `cwd` must point to `./src` or the temporary scaffold directory (see Step A). Returns `{ sessionId, output, exited, exitCode }` — `output` is the terminal screen once it settles.
+- **`send_key({ sessionId, keys })`** — Sends one interaction: a named key (`up`, `down`, `enter`, `space`, `tab`, `escape`, `ctrl-c`, `backspace`), a combo (`down+down+enter`), or literal text (e.g. typing a project name), followed by a separate `enter` call. Returns the new `output` since the last read.
+- **`read_output({ sessionId, maxWaitMs })`** — Reads more output without sending a key. Use this when a step is expected to take a while (dependency install, git clone) and you need to keep polling until it settles or exits.
+- **`close_session({ sessionId })`** — Kills the process and frees the session. Always call this after a session reaches `exited: true`, or if the bootstrap is aborted mid-way.
+
+**Operating loop for every CLI step:**
+
+1. Call `start_cli_session`. Read the returned `output` like a screenshot of the terminal.
+2. If `exited: true` already → the command was non-interactive (or failed); read `exitCode` and move on / handle the error. No `send_key` needed.
+3. If not exited → the `output` is a prompt. Decide the next key/keys from what's literally on screen (do not assume a fixed script of steps in advance — read, then act, one step at a time).
+4. Call `send_key` with that decision. Repeat from step 2 with the new `output`.
+5. If a step is clearly a long-running task (installing deps, cloning) rather than a prompt, use `read_output` (optionally with a larger `maxWaitMs`) instead of guessing a key to send.
+6. Once `exited: true`, call `close_session` and record the final `exitCode` for the report.
+
+**Hard rules for MCP usage:**
+
+- Never fall back to a raw shell/bash execution tool for anything covered by the Reference Table of official scaffold commands, or for Step C / Step E — the navigator is the only execution path for this skill.
+- Never pre-script an entire multi-step interaction sequence and fire it blind. Read the actual `output` after every `start_cli_session`/`send_key` call before deciding the next key — menus vary by CLI version and by earlier answers.
+- If `command` would fall outside the navigator's allowlist, treat that as a Block 1/Block 4 answer that needs the "Other (specify)" path — do not attempt to work around the allowlist.
+- If a session produces no new output and doesn't exit within the navigator's own timeout, call `read_output` once more; if still stuck, `close_session`, report the stall with the last known screen content, and ask the user how to proceed rather than retrying blindly.
 
 ## Trigger Conditions
 
@@ -47,8 +76,8 @@ Run this as the very first thing. Do not skip it.
    ```
    ./src already contains files. Do you want to OVERWRITE the existing ./src contents? (yes / no)
    ```
-   Without an explicit `yes`, do **not** execute any scaffold command.
-3. Basic runtime availability (Node, Python, etc.) can be verified now, or deferred until after the questionnaire narrows the target stack.
+   Without an explicit `yes`, do **not** open any `mcp-cli-navigator` session.
+3. Basic runtime availability (Node, Python, etc.) can be verified now via `start_cli_session` (e.g. `node --version`) — these are non-interactive and will simply return `exited: true` immediately — or deferred until after the questionnaire narrows the target stack.
 
 ## Structured Questionnaire (SOP — 6 blocks, never assume)
 
@@ -126,7 +155,7 @@ Ask the desired **minimum level / accepted bar**. `"None for now / urgency first
 
 ## Post-Questionnaire — Summary + Human Approval
 
-Before executing **any** CLI command, present the human with a concise approval summary. Do not proceed on your own.
+Before opening **any** `mcp-cli-navigator` session, present the human with a concise approval summary. Do not proceed on your own.
 
 ```
 Bootstrap Plan Draft
@@ -145,8 +174,8 @@ Testing setup:
   Scope:     [answer]
 
 Output location: ./src
-Official scaffold command to be run:
-  [exact command + flags you will run]
+Official scaffold command to be run (via mcp-cli-navigator):
+  [exact command + args you will pass to start_cli_session]
 
 Manual adjustments after CLI (if any):
   1. [Adjustment] — Reason: [a / b / c classification + why]
@@ -158,49 +187,52 @@ Human APPROVAL REQUIRED before any CLI execution. Reply APPROVE to proceed.
 
 ## Execution Workflow (after explicit APPROVE)
 
-Run in order. Do not skip validation steps.
+Run in order. Do not skip validation steps. **All** CLI execution in this workflow goes through `mcp-cli-navigator` per the operating loop described above — never a raw shell tool.
 
-### Step A — Run the official scaffolding command
+### Step A — Run the official scaffolding command via mcp-cli-navigator
 
 Prefer **always the latest official command + flags** of the chosen framework. If there is version ambiguity, validate against the framework's official documentation URL before running.
 
-- If the CLI natively supports a **destination directory flag**, point it to `./src` (or to the appropriate sub-folder under `./src` for monorepo layouts).
-- If the CLI does **NOT** support a destination flag → create a temporary directory (e.g., `./.tmp-bootstrap`), run the scaffold there, then **move the produced content** to `./src`, and delete the temporary folder afterwards.
+- If the CLI natively supports a **destination directory flag**, call `start_cli_session` with `cwd` set so the output lands in `./src` (or the appropriate sub-folder under `./src` for monorepo layouts).
+- If the CLI does **NOT** support a destination flag → call `start_cli_session` with `cwd` pointing at a temporary directory (e.g., `./.tmp-bootstrap`), drive the scaffold there via the operating loop, then **move the produced content** to `./src` (a file-move, not a CLI-navigator step), and delete the temporary folder afterwards.
+- Drive every prompt through `send_key`, reading the real `output` at each step (project name, TS/JS, linter, router, package manager confirmation, etc.) rather than assuming the sequence in advance. Close the session once `exited: true` and record the `exitCode`.
 
 ### Step B — Manual adjustments allowed (and ONLY these)
 
-Writing files by hand is restricted to the following cases. Everything else must come from the official CLI.
+Writing files by hand is restricted to the following cases. Everything else must come from the official CLI, driven through `mcp-cli-navigator`.
 
-1. **Case (a) — Relocation to** **`./src`:** Path fixing, moving nested sub-folders if the CLI produced incorrect nesting inside `./src`.
+1. **Case (a) — Relocation to** **`./src`:** Path fixing, moving nested sub-folders if the CLI produced incorrect nesting inside `./src`. (Plain file operations — not a navigator session.)
 2. **Case (b) — Questionnaire answers not covered by the official command:**
    - Add CI configuration (e.g., a GitHub Actions workflow file under `.github/workflows/`), **always using official starter templates** from GitHub starter-workflows or the equivalent official source for the CI provider.
    - Add Dependabot / Renovate configuration files from **official templates**.
-   - Add security linter packages / audit scripts into `package.json` / `requirements-dev.txt` / project dev dependencies, using the **standard official plugin / package names**.
+   - Add security linter packages / audit scripts into `package.json` / `requirements-dev.txt` / project dev dependencies, using the **standard official plugin / package names** — install them via `mcp-cli-navigator` (e.g. `npm install -D <plugin>` through `start_cli_session`), not by hand-editing lockfiles.
    - Write or update `agent/docs/security.md` with the controls applied (flip rows to `Status = complete` + fill `Notes/Reference`).
    - Create `.env.example` + add `.env` to `.gitignore` if the CLI did not do it already.
-   - CORS / security headers baseline hardening via the **standard official plugin or package** for the framework.
+   - CORS / security headers baseline hardening via the **standard official plugin or package** for the framework, installed through `mcp-cli-navigator`.
 3. **Case (c) — Integrations with no official scaffold command:** e.g., adding a pre-commit hook config when no `init` command exists for it.
 
-### Step C — Apply the selected Testing setup
+### Step C — Apply the selected Testing setup via mcp-cli-navigator
 
-If it goes beyond the framework default, use the framework's official add-plugin / install commands (do not hand-write test configs unless no official command exists).
+If it goes beyond the framework default, use the framework's official add-plugin / install commands through `start_cli_session` + the operating loop (do not hand-write test configs unless no official command exists). Installers for test frameworks can also prompt interactively (e.g. choosing a runner or config style) — treat them the same as Step A: read the screen, respond via `send_key`.
 
 ### Step D — Write / Update `agent/docs/security.md`
 
 This step is mandatory if any of the Security controls were accepted, or to explicitly mark them `n/a`.
 
-- For every control in **Block 5** → flip the row in `agent/docs/security.md` Controls Matrix to `Status = complete` / `pending` / `n/a`.
+- For every control in **Block 5** → flip the row in `agent/docs/security.md` Controls Matrix to `Status = complete` / `pending` / `n/a`.
 - Fill the `Notes / Reference` column with a concrete path to the configuration file, or an explicit rationale.
 - Fill the section `Deployment & Runtime Hardening` with the target chosen in Block 4.
 - Fill sections `Secret Management` and `Dependency Hygiene` accordingly.
 
-### Step E — Minimal final validation
+(This step is documentation only — no `mcp-cli-navigator` session needed.)
 
-Compile or run the **empty project once** to confirm the scaffold actually boots:
+### Step E — Minimal final validation via mcp-cli-navigator
 
-- Node/TS frontend / fullstack: `npm run build` (exit after build finishes) or `npm run dev` (kill the process after you observe successful boot).
-- Python FastAPI: run `uvicorn app.main:app --port 0 --log-level info` (kill immediately after a clean startup line).
-- Any other framework: the equivalent short compile-or-boot command for an empty baseline.
+Compile or run the **empty project once** to confirm the scaffold actually boots, using `start_cli_session` (and `read_output` while it warms up):
+
+- Node/TS frontend / fullstack: `npm run build` (session should reach `exited: true` on its own) or `npm run dev` (poll with `read_output` until you see a successful boot line in the output, then `close_session` to kill it — dev servers don't exit on their own).
+- Python FastAPI: `uvicorn app.main:app --port 0 --log-level info` — poll with `read_output` until a clean startup line appears, then `close_session`.
+- Any other framework: the equivalent short compile-or-boot command for an empty baseline, driven the same way.
 - If this fails → attempt **one minimal fix** of PATHs / misplacement from Step A, then report; do not deep-dive.
 
 ## Final Report (CLI vs manual breakdown)
@@ -210,8 +242,9 @@ When finished, print a structured report that explicitly separates what the offi
 ```
 Bootstrap Complete Report
 =========================
-Official scaffold command executed:
-  [full command + flags as run]
+Official scaffold command executed (via mcp-cli-navigator):
+  [full command + args as run]
+  Interactive prompts encountered: [brief list of what was answered, e.g. "project name, TS, ESLint: yes, router: yes"]
   → generated the following baseline files (or a short summary) under ./src
 
 Manual adjustments NOT produced by CLI:
@@ -227,7 +260,7 @@ Testing setup:
   - Framework: [xxx]
   - Scope:     [xxx]
 
-Validation (empty project compile/run):
+Validation (empty project compile/run via mcp-cli-navigator):
   [PASS / FAIL + one-line evidence]
 
 Output location: ./src
@@ -240,7 +273,7 @@ any follow-up configuration or new feature work:
 
 ## Reference Table: Official Scaffold Commands
 
-Not exhaustive — **always validate the current version against official docs before running.**
+Not exhaustive — **always validate the current version against official docs before running.** Every command below is executed via `mcp-cli-navigator` (`start_cli_session` + `send_key` loop), regardless of whether it happens to be interactive — no need to pre-classify.
 
 | Framework                | Type                 | Default Lang                      | Official Command (reference — validate version before running)                        |
 | ------------------------ | -------------------- | --------------------------------- | ------------------------------------------------------------------------------------- |
@@ -285,9 +318,10 @@ Not exhaustive — **always validate the current version against official docs b
 HARD RULES — never break these:
 
 1. **Never write by hand** `package.json`, `tsconfig.json`, `vite.config.*`, `next.config.*`, `angular.json`, `pyproject.toml`, `settings.py`, `Cargo.toml`, `go.mod`, `composer.json`, etc. if the framework's official CLI already generates them. Hand-writing is allowed ONLY for cases (a), (b), (c) of the Execution Workflow.
-2. **Do NOT mix roles in the same pass.** After the bootstrap runs and the report is printed, STOP. Do not implement any feature, any business endpoint, any view beyond the empty scaffold. If the user requests `"bootstrap + implement a login"` in the same message: run the bootstrap, print this report, and reply that the login feature must go through the standard `feature-planner → implementor` path.
-3. **Do NOT assume.** If the user left any questionnaire block unanswered, ask before executing. Never pick a default silently — always state out loud which default you are picking and why, if you are picking one.
-4. **Do NOT overwrite** **`./src`** **without explicit confirmation.** See Pre-flight Anti-Overwrite Guard.
-5. **Do NOT use deprecated commands or flags.** Always prefer the latest command documented by the framework. If in doubt, validate against the official documentation URL before executing.
-6. **Do NOT touch** **`agent/docs/security.md`** **from other skills** — only `bootstraper` and `implementor` are allowed to write it. `feature-planner` never reads or writes it in a capacity that would apply controls.
-
+2. **Never execute CLI commands outside `mcp-cli-navigator`.** No raw shell/bash tool, no "this one looks non-interactive so I'll skip the navigator" shortcuts. `start_cli_session` on a non-interactive command simply returns `exited: true` immediately — there is no cost to always going through it, and it removes an entire class of hangs from unclassified interactive prompts.
+3. **Do NOT mix roles in the same pass.** After the bootstrap runs and the report is printed, STOP. Do not implement any feature, any business endpoint, any view beyond the empty scaffold. If the user requests `"bootstrap + implement a login"` in the same message: run the bootstrap, print this report, and reply that the login feature must go through the standard `feature-planner → implementor` path.
+4. **Do NOT assume.** If the user left any questionnaire block unanswered, ask before executing. Never pick a default silently — always state out loud which default you are picking and why, if you are picking one. This includes reading actual `mcp-cli-navigator` output before choosing the next `send_key` — never guess an interaction sequence blind.
+5. **Do NOT overwrite** **`./src`** **without explicit confirmation.** See Pre-flight Anti-Overwrite Guard.
+6. **Do NOT use deprecated commands or flags.** Always prefer the latest command documented by the framework. If in doubt, validate against the official documentation URL before executing.
+7. **Do NOT touch** **`agent/docs/security.md`** **from other skills** — only `bootstraper` and `implementor` are allowed to write it. `feature-planner` never reads or writes it in a capacity that would apply controls.
+8. **Do NOT leave sessions open.** Every `start_cli_session` must be matched with a `close_session` once it exits (or once aborted) — don't leak PTY processes across steps or across the whole bootstrap run.
