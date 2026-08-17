@@ -23,6 +23,21 @@ This skill **NEVER** implements business features in the same pass. That is the 
 This skill **NEVER** plans or specs features. That is the `feature-planner` skill's job at [feature-planner/SKILL.md](file:///Users/leandro/Documents/projects/harness-template/.trae/skills/feature-planner/SKILL.md).
 This skill **writes and updates** `agent/docs/security.md` as the single source of truth for applied security controls.
 
+## Path Semantics (non-negotiable)
+
+`./src` is a **project-relative path**, meaning:
+
+- `./src` MUST always resolve to `<repoRoot>/src` (example: `/Users/leandro/Documents/projects/designa/src`)
+- `./src` MUST NEVER be interpreted as an absolute path like `/src`
+- Temporary scaffolding directories MUST live inside the repo (example: `<repoRoot>/.tmp-bootstrap`), never in `/tmp`
+
+**repoRoot resolution rule (mandatory):**
+
+- Before any path-sensitive step, resolve the repository root using an allowlisted CLI command via `mcp-cli-navigator`:
+  - Preferred: `git rev-parse --show-toplevel`
+  - Fallback: `node -e "console.log(process.cwd())"` (only if git is unavailable)
+- From that point on, treat every path in this skill (`./src`, `./.tmp-bootstrap`, etc.) as **relative to repoRoot**, and when calling `start_cli_session`, pass `cwd` as an **absolute path** derived from repoRoot.
+
 ## MCP Requirement — mcp-cli-navigator (mandatory for ALL CLI execution)
 
 **Every** command this skill runs against a terminal — scaffold commands, plugin/testing installs, validation boots, everything in Steps A/C/E — MUST go through the `mcp-cli-navigator` MCP tools, never through a raw shell/bash tool.
@@ -31,7 +46,7 @@ Reasoning: the large majority of official scaffold commands (`npm create vite@la
 
 Available tools and how to use them in this skill:
 
-- **`start_cli_session({ command, args, cwd })`** — Launches the command. `command` must be one of the officially allowlisted binaries (npm, npx, yarn, pnpm, bun, uv, pip, poetry, cargo, go, git, ng, django-admin, python, composer, symfony, rails, sam, cdk, spring, etc.). `cwd` must point to `./src` or the temporary scaffold directory (see Step A). Returns `{ sessionId, output, exited, exitCode }` — `output` is the terminal screen once it settles.
+- **`start_cli_session({ command, args, cwd })`** — Launches the command. `command` must be one of the officially allowlisted binaries (npm, npx, yarn, pnpm, bun, uv, pip, poetry, cargo, go, git, ng, django-admin, python, composer, symfony, rails, sam, cdk, spring, etc.). `cwd` MUST be an **absolute path**, and MUST be inside the current repository (repoRoot) unless the user explicitly asked otherwise. Returns `{ sessionId, output, exited, exitCode }` — `output` is the terminal screen once it settles.
 - **`send_key({ sessionId, keys })`** — Sends one interaction: a named key (`up`, `down`, `enter`, `space`, `tab`, `escape`, `ctrl-c`, `backspace`), a combo (`down+down+enter`), or literal text (e.g. typing a project name), followed by a separate `enter` call. Returns the new `output` since the last read.
 - **`read_output({ sessionId, maxWaitMs })`** — Reads more output without sending a key. Use this when a step is expected to take a while (dependency install, git clone) and you need to keep polling until it settles or exits.
 - **`close_session({ sessionId })`** — Kills the process and frees the session. Always call this after a session reaches `exited: true`, or if the bootstrap is aborted mid-way.
@@ -71,7 +86,8 @@ Do **NOT** invoke this skill if:
 
 Run this as the very first thing. Do not skip it.
 
-1. List the contents of `./src` (if the directory exists).
+1. Resolve `repoRoot` (see Path Semantics), then compute the absolute path `srcDir = <repoRoot>/src`.
+2. List the contents of `srcDir` (only if the directory exists). If it does not exist, treat it as empty and continue.
 2. If `./src` contains **any files or folders other than** `.gitkeep` or a placeholder `README.md` → **STOP.** Ask the user for explicit confirmation to overwrite, using an explicit yes/no prompt:
    ```
    ./src already contains files. Do you want to OVERWRITE the existing ./src contents? (yes / no)
@@ -193,8 +209,10 @@ Run in order. Do not skip validation steps. **All** CLI execution in this workfl
 
 Prefer **always the latest official command + flags** of the chosen framework. If there is version ambiguity, validate against the framework's official documentation URL before running.
 
-- If the CLI natively supports a **destination directory flag**, call `start_cli_session` with `cwd` set so the output lands in `./src` (or the appropriate sub-folder under `./src` for monorepo layouts).
-- If the CLI does **NOT** support a destination flag → call `start_cli_session` with `cwd` pointing at a temporary directory (e.g., `./.tmp-bootstrap`), drive the scaffold there via the operating loop, then **move the produced content** to `./src` (a file-move, not a CLI-navigator step), and delete the temporary folder afterwards.
+- Always set `cwd` to an **absolute** path derived from `repoRoot`.
+- Prefer running scaffolding commands from `cwd = repoRoot` and specifying output folders under `./src` in the command args (example: `... my-app` where `my-app` is `src/<something>`), so the destination is explicit.
+- If the CLI natively supports a **destination directory flag**, use it and point it at `srcDir` (or a subfolder of it), still keeping `cwd` inside `repoRoot`.
+- If the CLI does **NOT** support a destination flag → use a temporary directory inside the repo (example: `<repoRoot>/.tmp-bootstrap`), drive the scaffold there via the operating loop, then **move the produced content** to `srcDir` (a file-move, not a CLI-navigator step), and delete the temporary folder afterwards.
 - Drive every prompt through `send_key`, reading the real `output` at each step (project name, TS/JS, linter, router, package manager confirmation, etc.) rather than assuming the sequence in advance. Close the session once `exited: true` and record the `exitCode`.
 
 ### Step B — Manual adjustments allowed (and ONLY these)
