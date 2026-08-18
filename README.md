@@ -15,30 +15,33 @@ Opening this repository for the first time must start in the same place:
 
 👉 **[AGENTS.md](./AGENTS.md)** 👈
 
-## You HUMAN, not agent:
 
-### To add new features, do the following:
+--- 
+Following steps are only for human, not agent:
 
-* Write the entry in `feature_list.json`
-* Set a unique priority (or at least make it clearly the top priority)
-* Set `status = not_started`
-* Make `user_visible_behavior` as observable as possible
-* Make `verification.checks` as concrete as possible
-* Set `session_ids = []`
-* If the feature is moderately complex:
-  * Create `./agent/docs/features/feature-XXX.md` with:
-    * objective
-    * expected behavior
-    * out of scope
-    * acceptance criteria
-    * minimum expected evidence
+## Steps to begin with an empty repository:
 
-* If it affects product / architecture / reliability:
-  * Update `product.md`
-  * Update `architecture.md`
-  * Update `reliability.md` (Golden Journeys if applicable)
-  * If new scripts were required, update `init.sh` / `check-architecture.sh` / `e2e-check.sh`
+1. Use the skill `/bootstrap` to scaffold the technical setup, this skill will assist you on:
+    - Questionnaire about:
+        - Name of project
+        - Description of project
+        - Target audience of project
+        - Technical stack of project
+        - Testing scope of project
+        - Verification scope of project
+        - Verification tools of project
+    - Then it will scaffold the initial version of:
+        - `product.md`
+        - `architecture.md`
+        - `reliability.md`
+        - `feature_list.json`
+        - `init.sh` and `check-architecture.sh`
+        - `e2e-check.sh`
+        - `./src`
+    - The skill will automatically ensure the setup is verified.
 
-* Leave the repo in a healthy baseline before handing it over to the agent:
-  * `./agent/verification/init.sh` → exit 0
-  * If not, the agent must enter **baseline fix** first, not feature work.
+2. Use the skill `/feature-planner` to plan the first (and consecutive) features of the product.
+
+3. Use the skill `/implementor` to implement the features of the product.
+
+4. Go to step 2 and repeat the Ralph loop.
