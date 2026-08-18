@@ -20,8 +20,8 @@ Guiding principle: **DO NOT REINVENT BOILERPLATE.**
   - **(c)** Integrating pieces that have no official command of their own.
   - **(d)** Writing/updating the harness documentation and state artifacts described in this file (`architecture.md`, `product.md`, `reliability.md`, `security.md`, `e2e-check.sh`, `feature_list.json`, `feature-001.md`, `progress.md`, `session-handoff.md`, session logs). These are documentation/state, not application boilerplate, so the "never hand-write" rule does not apply to them.
 
-This skill **NEVER** implements business features in the same pass. That is the `implementor` skill's job at [implementor/SKILL.md](file:///Users/leandro/Documents/projects/harness-template/.trae/skills/implementor/SKILL.md).
-This skill **NEVER** plans or specs *new* features beyond the bootstrap task itself. That is the `feature-planner` skill's job at [feature-planner/SKILL.md](file:///Users/leandro/Documents/projects/harness-template/.trae/skills/feature-planner/SKILL.md).
+This skill **NEVER** implements business features in the same pass. That is the `implementor` skill's job at [implementor/SKILL.md](.trae/skills/implementor/SKILL.md).
+This skill **NEVER** plans or specs *new* features beyond the bootstrap task itself. That is the `feature-planner` skill's job at [feature-planner/SKILL.md](.trae/skills/feature-planner/SKILL.md).
 This skill **writes and updates** `agent/docs/architecture.md`, `agent/docs/product.md`, `agent/docs/reliability.md`, and `agent/docs/security.md` as the single source of truth for the initial stack, product domain, restart/health story, and applied security controls.
 
 ## Path Semantics (non-negotiable)
