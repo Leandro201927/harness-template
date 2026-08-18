@@ -9,9 +9,11 @@ description: "Transforms a user's natural-language request into a structured har
 
 Transform a user's natural-language implementation request into a fully-structured harness feature plus an initial dynamic task plan. This skill is **specification-only**:
 
+- Every plan draft this skill produces is persisted as a file under agent/docs/plans/ — never presented only as inline chat text.
 - The new feature is created with `status: not_started`.
 - A human must explicitly approve the plan before any status transition to `in_progress`.
 - **This skill touches ONLY files inside `/agent`** (docs + state). It does NOT install dependencies, run the app, or touch `/src`. The "Startup → Implementation → Handoff" loop lives in the `implementor` skill at [implementor/SKILL.md](./.trae/skills/implementor/SKILL.md), not in AGENTS.md and not in this planning skill. After planning is complete and the human approves, the implementing agent (via the `implementor` skill) will pick up the approved feature and execute that workflow.
+
 
 ## Trigger Conditions
 
@@ -39,6 +41,7 @@ Before writing any file, read ALL of the following artifacts **in this order** t
 5. `agent/state/feature_list.json` — existing IDs + priorities + the `single_active_feature` rule. Source for the next numeric ID.
 6. `agent/state/session-handoff.md` — whether the prior session left a known broken state that the new feature must not worsen.
 7. `agent/state/progress.md` — last verified state; avoid regressing the listed passing features.
+8. `agent/docs/plans/` — check for an existing plan-feature-XXX.md matching an unresolved request from a prior session (e.g. one still awaiting clarification answers or human APPROVE). If found, resume/update that file instead of starting a fresh one.
 
 If `architecture.md` + `product.md` are both empty or near-empty, add a **mandatory task #1** to confirm the tech stack / context before any coding. Never assume a stack.
 
@@ -49,7 +52,37 @@ Before Execution Workflow, strictly follow these rules:
 - Read AGENTS.md for shared rules, artifact semantics, routing map, and required structure only. AGENTS.md no longer contains implementation workflows.
 - This skill touches ONLY files inside `/agent` (docs + state). It does NOT install dependencies, run the app, or touch `/src`. The implementation workflow lives in the `implementor` skill, not in this one.
 - Do not modify any files outside `/agent`.
-- If user's request is ambiguous or unclear, ask for clarification before proceeding.
+- If user's request is ambiguous or unclear, ask for clarification before proceeding using the Clarification Protocol section.
+- This includes `agent/docs/plans/` as a valid write target — it is not implementation code, it is planning documentation.
+
+## Clarification Protocol (mandatory when ambiguity is detected)
+
+If, at any point during Pre-flight or Steps 1-3, a required input is missing,
+contradictory, or admits more than one reasonable interpretation, STOP at that
+point. Do not proceed to write `feature_list.json` or `feature-XXX.md` on an
+assumption.
+
+Every clarification must be raised as a structured question:
+- A short, explicit `question` string.
+- Predefined, mutually exclusive `options` when the answer space is enumerable.
+- An `Other (specify)` free-text option, always present.
+
+Rules:
+- One open item per structured question. If multiple things are unclear,
+  ask them as multiple structured questions in the same turn — never folded
+  into a single free-text paragraph.
+- Never combine a clarifying question with a "here's what I already drafted"
+  recap. If a one-sentence recap is useful, keep it to one sentence, then end
+  the turn with the structured question(s) — the turn must not read as a
+  finished plan.
+- Do not proceed to Step 4 (plan presentation) while any clarification raised
+  under this protocol remains unanswered. "Open Questions Before
+  Implementation" in the feature doc is reserved for genuine unknowns that
+  don't block planning (e.g. "confirm in task 1") — not for ambiguity that
+  should have stopped the SOP earlier.
+- If the ambiguity surfaces late (e.g. mid-Step 3, while drafting tasks),
+  treat it exactly the same way: stop, ask, don't keep drafting around it.
+
 
 ## Execution Workflow (SOP — 6 steps)
 
@@ -151,19 +184,18 @@ Task rules:
 - `Estimated Files`: list concrete file paths when knowable from architecture.md. Else `"TBD (confirmed in task 1)"`.
 - Keep tasks implementation-sized: each should be doable in a focused sub-session (not 10-line trivialities, and not "build everything").
 
+### Step 4 — Write the plan draft to `agent/docs/plans/plan-feature-XXX.md`
+Before presenting anything in chat, write the full approval content (everything currently listed as items 1-6 of the old Step 4: header, title/area/user_visible_behavior, Implementation Tasks table, Complexity Flags + reasoning, Open Questions, Out of Scope) into `agent/docs/plans/plan-feature-XXX.md`.
+- File naming: `plan-feature-XXX.md`, matching the feature ID from Step 1. One file per feature-in-flight.
+- If the plan is revised before approval (e.g. after the Clarification Protocol resolves an open question), **overwrite this same file** — do not create versioned copies (`plan-feature-XXX-v2.md` etc.).
+- This file is a draft artifact, distinct from `agent/docs/features/feature-XXX.md` (Step 3): the plans file is the human-facing approval surface; the feature doc is the canonical execution spec `implementor` will read. Keep both in sync in content, but never merge them into one file.
 
-### Step 4 — Present the plan to the human and stop
+### Step 5 — Present a pointer to the human and stop
+Do **not** paste the full plan content inline in chat again — it already lives in the file from Step 4. The chat message must only contain:
+1. Header: `Feature Plan Draft for ${id} — see agent/docs/plans/plan-feature-XXX.md — requires human approval before implementation.`
+2. A 2-3 line summary (title, area, complexity flag).
+3. Whether there are open questions blocking approval (yes/no — details are in the file, don't repeat them here).
 
-Print a concise approval prompt. Do **not** proceed past this step on your own.
-
-The prompt must include, in this order:
-
-1. Header: `Feature Plan Draft for ${id} — requires human approval before implementation.`
-2. `title`, `area`, `user_visible_behavior` from the new feature_list entry.
-3. The **Implementation Tasks (Dynamic)** table, verbatim.
-4. **Complexity Flags** (which boxes are checked) + short reasoning.
-5. **Open Questions Before Implementation** (if any; else state "None").
-6. **Out of Scope** list (3 bullets max; if longer, say "See full doc").
 
 ## Dynamic Task Update Rules (for the implementing agent, embedded here so they live with the plan)
 
@@ -187,3 +219,6 @@ These are constraints you must self-enforce while running this skill. If a guard
 5. **Templates remain untouched.** You read `agent/templates/*` for structure only. This skill never writes into the `agent/templates/` directory.
 6. **Task plan location is non-negotiable.** Tasks live in `agent/docs/features/feature-XXX.md`. Anywhere else is wrong. Correct yourself before writing if you catch yourself about to add tasks to feature_list.json.
 7. **Status never auto-promotes.** Only the human's APPROVE triggers the implementing agent to flip status. If the human says nothing, the feature remains `not_started` and the repo state is fully valid.
+8. No buried assumptions. Never state an assumption inside a summary or inside the generated feature doc as a substitute for asking. If you catch yourself writing "asumí X, corrígeme si no" anywhere in the output, that is the signal to stop and use the Clarification Protocol instead.
+9. Plans are files, not chat output. Never present the full approval prompt only as inline message text — it must exist first as agent/docs/plans/plan-feature-XXX.md. If you catch yourself drafting the full table/reasoning directly into a chat response instead of the file, stop and write the file first.
+10. No plan file deletion. Once plan-feature-XXX.md is written, never delete it, even after approval or after the feature reaches passing. It stays as the historical record of what was proposed and approved.
