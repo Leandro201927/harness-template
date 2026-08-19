@@ -94,6 +94,8 @@ These are constraints that every agent (bootstraper, planner, or implementor) mu
    Read `agent/templates/*` for structure only. Never write into the `agent/templates/` directory.
 6. **Only bootstraper and implementor may touch `agent/docs/security.md`.**
    `feature-planner` never writes to the security artifact. It is the single source of truth for applied controls, written during scaffolding and updated when security-relevant implementation changes occur.
+7. **Only bootstraper and implementor may touch `agent/docs/design.md`.**
+   `feature-planner` never writes to the design artifact. It is the single source of truth for applied design system decisions, written during scaffolding and updated when design-relevant implementation changes occur.
 
 ## 5. Required Artifacts
 
@@ -103,6 +105,7 @@ These artifacts define the system of record. All roles must know them, update th
 - `./agent/docs/product.md`: documentation for the system product
 - `./agent/docs/reliability.md`: documentation for how the system proves it is healthy and restartable
 - `./agent/docs/security.md`: documentation for all security controls, minimum bar, and decisions. Updated ONLY by the `bootstraper` and `implementor` skills.
+- `./agent/docs/design.md`: documentation for all design system decisions, tokens, component libraries, folder conventions, theming, typography, colors, and accessibility standards. Updated ONLY by the `bootstraper` and `implementor` skills.
 - Feature docs under `./agent/docs/features/` include a runtime-editable `Implementation Tasks (Dynamic)` table; this is the only authoritative task list for the feature.
 - `./agent/state/logs/session-log-${id}.md`: session log with critical decisions, verification run, evidence captured, commits, files or artifacts updated, known risk or unresolved issue
 - `./agent/state/clean-state-checklist.md`: checklist for cleaning the repository state after a session ends
@@ -164,4 +167,7 @@ The following Required Artifacts should follow the structure template. Use it as
 - [security](./agent/docs/security.md)
   - Template: [security.md](./agent/templates/docs/security.md)
   - Updated **ONLY** by `bootstraper` and `implementor`. The `feature-planner` skill must not write to this artifact.
+- [design](./agent/docs/design.md)
+  - Template: [design.md](./agent/templates/docs/design.md)
+  - Updated during bootstrap (by `bootstraper`) when the project contains a frontend. The `feature-planner` skill must not write to this artifact. Updated by `implementor` only when design-relevant implementation changes occur.
 

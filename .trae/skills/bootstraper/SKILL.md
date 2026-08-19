@@ -1,6 +1,6 @@
 ---
 name: "bootstraper"
-description: "Bootstraps a brand new project (web/fullstack/frontend-only/backend-only) inside ./src via OFFICIAL framework CLIs — never writes boilerplate by hand. Executes all CLI commands through the mcp-cli-navigator MCP (PTY-based, turn-based) since most scaffolding CLIs present interactive menus. Also seeds architecture.md, product.md, reliability.md, wires the initial test command into e2e-check.sh, and replaces the feature-001 template placeholder with the bootstrap work itself, documented and handed off exactly like the implementor skill would. Triggers when user message begins with or contains the 'bootstrap' keyword."
+description: "Bootstraps a brand new project (web/fullstack/frontend-only/backend-only) inside ./src via OFFICIAL framework CLIs — never writes boilerplate by hand. Executes all CLI commands through the mcp-cli-navigator MCP (PTY-based, turn-based) since most scaffolding CLIs present interactive menus. Also seeds architecture.md, product.md, reliability.md, design.md (if frontend), wires the initial test command into e2e-check.sh, and replaces the feature-001 template placeholder with the bootstrap work itself, documented and handed off exactly like the implementor skill would. Triggers when user message begins with or contains the 'bootstrap' keyword."
 ---
 
 # Bootstraper Skill
@@ -22,7 +22,7 @@ Guiding principle: **DO NOT REINVENT BOILERPLATE.**
 
 This skill **NEVER** implements business features in the same pass. That is the `implementor` skill's job at [implementor/SKILL.md](.trae/skills/implementor/SKILL.md).
 This skill **NEVER** plans or specs *new* features beyond the bootstrap task itself. That is the `feature-planner` skill's job at [feature-planner/SKILL.md](.trae/skills/feature-planner/SKILL.md).
-This skill **writes and updates** `agent/docs/architecture.md`, `agent/docs/product.md`, `agent/docs/reliability.md`, and `agent/docs/security.md` as the single source of truth for the initial stack, product domain, restart/health story, and applied security controls.
+This skill **writes and updates** `agent/docs/architecture.md`, `agent/docs/product.md`, `agent/docs/reliability.md`, `agent/docs/security.md`, and `agent/docs/design.md` (when the project includes a frontend) as the single source of truth for the initial stack, product domain, restart/health story, applied security controls, and design system decisions.
 
 ## Path Semantics (non-negotiable)
 
@@ -248,6 +248,36 @@ Other (specify): free text
 
 Step H0 / Step H are mandatory later in this workflow. If Testing scope is `"None for now"`, `e2e-check.sh` is still wired, but to a build/compile-style verification rather than a test runner.
 
+### Block 7 — Design System (ONLY asked when Project Type includes a frontend — Fullstack or Solo Frontend; if Solo Backend, SKIP THIS ENTIRE BLOCK)
+
+**1. Design tokens format?**
+```
+Question: "¿Qué formato de design tokens querés usar?"
+Options: ["CSS custom properties", "Tailwind config", "Style Dictionary / JSON tokens", "Ninguno por ahora"]
+Other (specify): free text
+```
+
+**2. Component folder convention?**
+```
+Question: "¿Qué convención de carpetas para componentes?"
+Options: ["Atomic design (atoms/molecules/organisms)", "Feature-based / colocation", "Flat components/", "Default del framework"]
+Other (specify): free text
+```
+
+**3. Base component library?**
+```
+Question: "¿Qué librería base de componentes querés usar?"
+Options: ["shadcn/ui", "Radix headless", "Construir desde cero", "Otra"]
+Other (specify): free text
+```
+
+**4. Theming support?**
+```
+Question: "¿Querés soporte de theming en la aplicación?"
+Options: ["Sí — light/dark mode", "Sí — multi-tema dinámico", "Tema único (sin theming por ahora)", "Decidir más tarde"]
+Other (specify): free text
+```
+
 ## Any Additional or Clarifying Question — same mandatory format (no exceptions, no "final answer" shortcuts)
 
 Sometimes, after Blocks 0–6, the skill discovers it still needs one more piece of information that wasn't foreseeable as its own numbered item above (e.g. disambiguating a CLI flag, resolving a naming conflict, confirming an edge case in the chosen stack). When this happens:
@@ -283,6 +313,12 @@ Testing setup:
   Scope:     [answer]
   e2e-check.sh will be wired to: [command — tests if configured, otherwise build/compile]
 
+Design System setup (only if frontend — Fullstack or Solo Frontend; omit entire section if Solo Backend):
+  Tokens format:        [Block 7.1 answer]
+  Folder convention:    [Block 7.2 answer]
+  Component library:    [Block 7.3 answer]
+  Theming:              [Block 7.4 answer]
+
 Output location: ./src
 Official scaffold command to be run (via mcp-cli-navigator):
   [exact command + args you will pass to start_cli_session]
@@ -296,6 +332,7 @@ Documentation to be written/updated:
   - agent/docs/product.md
   - agent/docs/reliability.md
   - agent/docs/security.md
+  - agent/docs/design.md  (only if project includes frontend — Fullstack or Solo Frontend)
   - agent/state/feature_list.json (feature-001 will be REPLACED, not appended)
   - agent/docs/features/feature-001.md (REPLACED)
 
@@ -345,6 +382,7 @@ This step is **mandatory** (not conditional like before), because leaving `archi
 - **`product.md`**: the one-line description, target users, and Core Features sections from Block 0. These are the `area` values `feature-planner` will infer against on every future request — if Block 0 answers were `"TBD"`, say so explicitly here instead of inventing areas.
 - **`reliability.md`**: the golden journey(s) from Block 0, plus the command that proves the app boots (from Step A/E). If Step H0 wires `e2e-check.sh`, reference it here as the canonical restart/health check going forward.
 - **`security.md`**: for every control in **Block 5** → flip the row in the Controls Matrix to `Status = complete` / `pending` / `n/a`, fill `Notes / Reference` with a concrete path or rationale, fill `Deployment & Runtime Hardening` with the Block 4 target, and fill `Secret Management` / `Dependency Hygiene` accordingly.
+- **`design.md`** (ONLY if project includes a frontend — Fullstack or Solo Frontend; if Solo Backend, leave the existing placeholder untouched — do NOT delete or overwrite it): fill every section from the template using **Block 7** answers. Include explicitly: token format chosen (CSS props / Tailwind config / Style Dictionary / none), component library + any install instructions to follow later (shadcn/ui init command, Radix package names, etc.), the exact folder convention path under `./src` (e.g. `./src/components/atoms|molecules|organisms` for atomic, or `./src/features/<feature>/components` for colocation), theming strategy (light/dark mode toggle, multi-theme runtime, single theme), typography baseline if derivable from framework defaults, spacing/breakpoints convention, color accessibility baseline (WCAG AA minimum unless user specified otherwise), and any Figma or reference links from Block 7 "Other" answers.
 
 (This step is documentation only — no `mcp-cli-navigator` session needed.)
 
@@ -435,7 +473,7 @@ Also update the top-level `last_updated` field to today's date.
 
 Run these steps in order, **whether the bootstrap succeeded or hit the Step H.1 fix-attempt limit**, before printing the Final Report. This is the same discipline `implementor` applies at the end of every session, adapted to bootstrap.
 
-1. Write the session log in `agent/state/logs/session-log-${id}.md` (`id` = `yyyy-MM-dd-hhmmss`, one file per session). Include: Block 0–6 questionnaire answers, the exact scaffold command run, manual adjustments applied (Step B), security controls applied (Step D), the verify command wired into `e2e-check.sh` (Step H0), the `init.sh` result, and — if Step H.1 fix attempts occurred — each attempt with what was tried and why it failed.
+1. Write the session log in `agent/state/logs/session-log-${id}.md` (`id` = `yyyy-MM-dd-hhmmss`, one file per session). Include: Block 0–6 questionnaire answers, Block 7 questionnaire answers (if frontend — Fullstack or Solo Frontend), the exact scaffold command run, manual adjustments applied (Step B), security controls applied (Step D), the verify command wired into `e2e-check.sh` (Step H0), the `init.sh` result, and — if Step H.1 fix attempts occurred — each attempt with what was tried and why it failed.
 2. Update `agent/state/feature_list.json` per Step F (feature-001 fields), and append the session ID to its `session_ids`.
 3. Update `agent/state/session-handoff.md`:
    - **Success** (`init.sh` passing): reset to the empty/no-handoff marker defined in its template.
@@ -469,6 +507,7 @@ Documentation written/updated:
   - agent/docs/product.md
   - agent/docs/reliability.md
   - agent/docs/security.md
+  - agent/docs/design.md  (only if project includes frontend — Fullstack or Solo Frontend)
 
 Security controls applied (see agent/docs/security.md):
   ✅ [Control name 1]
@@ -479,6 +518,11 @@ Testing setup:
   - Framework: [xxx]
   - Scope:     [xxx]
   - e2e-check.sh wired to: [command — tests if configured, otherwise build/compile]
+
+Design System setup (only if frontend — Fullstack or Solo Frontend; omit entire section if Solo Backend):
+  - Tokens:      [Block 7.1 answer]
+  - Components:  [Block 7.3 answer] — folder convention: [Block 7.2 answer]
+  - Theming:     [Block 7.4 answer]
 
 Validation (init.sh via mcp-cli-navigator):
   [PASS / FAIL]
@@ -555,7 +599,8 @@ HARD RULES — never break these:
 6. **Do NOT overwrite `./src` without explicit confirmation.** See Pre-flight Anti-Overwrite Guard.
 7. **Do NOT use deprecated commands or flags.** Always prefer the latest command documented by the framework. If in doubt, validate against the official documentation URL before executing.
 8. **Do NOT touch `agent/docs/security.md` from other skills** — only `bootstraper` and `implementor` are allowed to write it. `feature-planner` never reads or writes it in a capacity that would apply controls.
-9. **Do NOT leave sessions open.** Every `start_cli_session` must be matched with a `close_session` once it exits (or once aborted).
-10. **Do NOT leave `feature-001` as the template placeholder.** Once bootstrap runs, it must always be overwritten in-place — never appended as a new ID, never left stale.
-11. **Do NOT exceed `MAX_FIX_ATTEMPTS` silently.** After the limit, stop and hand off exactly as described in Step H.1 and the Bootstrap Session Handoff — do not keep looping.
-12. **Do NOT commit when `init.sh` is failing.** A blocked bootstrap ends in a report and a handoff, not a commit.
+9. **Do NOT touch `agent/docs/design.md` from the `feature-planner` skill** — only `bootstraper` and `implementor` are allowed to write it. `feature-planner` reads it for design-system context during planning but never modifies it. If Solo Backend project, leave the placeholder untouched.
+10. **Do NOT leave sessions open.** Every `start_cli_session` must be matched with a `close_session` once it exits (or once aborted).
+11. **Do NOT leave `feature-001` as the template placeholder.** Once bootstrap runs, it must always be overwritten in-place — never appended as a new ID, never left stale.
+12. **Do NOT exceed `MAX_FIX_ATTEMPTS` silently.** After the limit, stop and hand off exactly as described in Step H.1 and the Bootstrap Session Handoff — do not keep looping.
+13. **Do NOT commit when `init.sh` is failing.** A blocked bootstrap ends in a report and a handoff, not a commit.

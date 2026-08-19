@@ -41,8 +41,9 @@ Before writing any code, read **ALL** of the following artifacts in this order. 
 5. `agent/docs/architecture.md` — layers, services, data flow, storage. If empty, you must treat missing architectural pieces as blockers rather than inventing them.
 6. `agent/docs/product.md` — feature areas, constraints, UI hints.
 7. `agent/docs/reliability.md` — golden journeys, restart rules. The verification you perform must align with (or explicitly reference) these.
-8. The active feature document: `agent/docs/features/feature-XXX.md` — especially the `Objective`, `Expected Behavior`, `Out of Scope`, `Acceptance Criteria`, `Minimum Expected Evidence`, and the full `Implementation Tasks (Dynamic)` table.
-9. Any additional document referenced inside the `verification` array of the active feature's `feature_list.json` entry.
+8. `agent/docs/design.md` — design system rules to respect when building UI components: token usage, folder convention for new components, theming strategy, accessibility baselines, base component library usage patterns. If empty or missing, fall back to default framework conventions and record the gap in the session log; do not invent design-system rules.
+9. The active feature document: `agent/docs/features/feature-XXX.md` — especially the `Objective`, `Expected Behavior`, `Out of Scope`, `Acceptance Criteria`, `Minimum Expected Evidence`, and the full `Implementation Tasks (Dynamic)` table.
+10. Any additional document referenced inside the `verification` array of the active feature's `feature_list.json` entry.
 
 ## Startup Workflow (Ralph Loop Phase 1 — Baseline)
 
@@ -65,7 +66,7 @@ Follow these during the Implementation phase. They are scope and quality guards,
 - Do **not** mark a feature complete just because code was added. Completion requires the Definition of Done below.
 - Keep changes **within the selected feature scope** unless a blocker forces a narrow supporting fix. If a supporting fix is required, log it in the session log with justification.
 - Do **not** silently change verification rules during implementation. If the `verification` steps from `feature_list.json` conflict with reality, surface this and amend them explicitly (append the delta to the session log and to the feature doc's Task Rationale).
-- Before implementing, at minimum read: architecture, product, reliability, the active feature doc under `./agent/docs/features/*`, and any other doc referenced by the active feature's `verification` field.
+- Before implementing, at minimum read: architecture, product, reliability, design, the active feature doc under `./agent/docs/features/*`, and any other doc referenced by the active feature's `verification` field.
 - Respect the structure of each required `.md` artifact you update: do **not** add or delete sections. Fill within the existing templates.
 - Do **not** change any file coming from the [templates](./agent/templates) directory.
 - Feature task plans live **ONLY** in `./agent/docs/features/feature-XXX.md` under the `## Implementation Tasks (Dynamic)` section. Never inside `feature_list.json`.

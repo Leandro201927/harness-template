@@ -38,10 +38,11 @@ Before writing any file, read ALL of the following artifacts **in this order** t
 2. `agent/docs/architecture.md` — layers, services, data flow, storage. If empty, mark "stack unknown" and add a task #1 to confirm it.
 3. `agent/docs/product.md` — feature areas, constraints, UI hints. Use this to infer the `area` field. If empty, `area = "unknown"`.
 4. `agent/docs/reliability.md` — golden journeys, restart rules. The verification steps you propose must align with (or explicitly reference) these.
-5. `agent/state/feature_list.json` — existing IDs + priorities + the `single_active_feature` rule. Source for the next numeric ID.
-6. `agent/state/session-handoff.md` — whether the prior session left a known broken state that the new feature must not worsen.
-7. `agent/state/progress.md` — last verified state; avoid regressing the listed passing features.
-8. `agent/docs/plans/` — check for an existing plan-feature-XXX.md matching an unresolved request from a prior session (e.g. one still awaiting clarification answers or human APPROVE). If found, resume/update that file instead of starting a fresh one.
+5. `agent/docs/design.md` — design system decisions, tokens, component conventions, theming strategy. If empty or missing, record the gap in Task Rationale and use "Default framework conventions" as fallback; do not invent design-system rules.
+6. `agent/state/feature_list.json` — existing IDs + priorities + the `single_active_feature` rule. Source for the next numeric ID.
+7. `agent/state/session-handoff.md` — whether the prior session left a known broken state that the new feature must not worsen.
+8. `agent/state/progress.md` — last verified state; avoid regressing the listed passing features.
+9. `agent/docs/plans/` — check for an existing plan-feature-XXX.md matching an unresolved request from a prior session (e.g. one still awaiting clarification answers or human APPROVE). If found, resume/update that file instead of starting a fresh one.
 
 If `architecture.md` + `product.md` are both empty or near-empty, add a **mandatory task #1** to confirm the tech stack / context before any coding. Never assume a stack.
 
