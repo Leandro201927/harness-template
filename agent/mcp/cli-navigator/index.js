@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
 import pty from "node-pty";
 import { randomUUID } from "node:crypto";
 
@@ -140,184 +140,132 @@ function waitForQuiet(session, { quietMs = DEFAULT_QUIET_MS, maxWaitMs = DEFAULT
 // Servidor MCP
 // ---------------------------------------------------------------------------
 
-const server = new Server(
-  { name: "mcp-cli-navigator", version: "2.0.0" },
-  { capabilities: { tools: {} } }
+const server = new McpServer({ name: "mcp-cli-navigator", version: "2.0.0" });
+
+const ALLOWED_COMMANDS_ARRAY = [...ALLOWED_COMMANDS];
+
+server.tool(
+  "start_cli_session",
+  "Lanza un comando CLI en un pseudo-terminal (PTY) y devuelve el output inicial una vez que la terminal se queda en silencio (prompt listo para interactuar). Usa send_key para enviar pulsaciones siguientes.",
+  {
+    command: z
+      .enum(ALLOWED_COMMANDS_ARRAY)
+      .describe(`Binario a ejecutar. Debe estar en la allowlist: ${ALLOWED_COMMANDS_ARRAY.join(", ")}`),
+    args: z
+      .array(z.string())
+      .default([])
+      .describe("Argumentos del comando (ej. ['create-vite@latest', '.'])"),
+    cwd: z
+      .string()
+      .describe("Directorio de trabajo donde se ejecuta el comando (ej. './src' o './.tmp-bootstrap')."),
+  },
+  async ({ command, args, cwd }) => {
+    const proc = pty.spawn(command, args, {
+      name: "xterm-color",
+      cols: 100,
+      rows: 30,
+      cwd,
+      env: process.env,
+    });
+
+    const sessionId = randomUUID();
+    const session = { proc, rawOutput: "", lastReadIndex: 0, exited: false, exitCode: null };
+    sessions.set(sessionId, session);
+
+    proc.onData((data) => {
+      session.rawOutput += data;
+    });
+    proc.onExit(({ exitCode }) => {
+      session.exited = true;
+      session.exitCode = exitCode;
+    });
+
+    const { newOutput, exited, exitCode } = await waitForQuiet(session);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ sessionId, output: newOutput, exited, exitCode }, null, 2),
+        },
+      ],
+    };
+  }
 );
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
-    {
-      name: "start_cli_session",
-      description:
-        "Lanza un comando CLI en un pseudo-terminal (PTY) y devuelve el output inicial una vez que la terminal se queda en silencio (prompt listo para interactuar). Usa send_key para enviar pulsaciones siguientes.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          command: {
-            type: "string",
-            description: `Binario a ejecutar. Debe estar en la allowlist: ${[...ALLOWED_COMMANDS].join(", ")}`,
-          },
-          args: {
-            type: "array",
-            items: { type: "string" },
-            description: "Argumentos del comando (ej. ['create-vite@latest', '.'])",
-          },
-          cwd: {
-            type: "string",
-            description: "Directorio de trabajo donde se ejecuta el comando (ej. './src' o './.tmp-bootstrap').",
-          },
-        },
-        required: ["command", "cwd"],
-      },
-    },
-    {
-      name: "send_key",
-      description:
-        "Envía una pulsación de teclado (o texto literal) a una sesión CLI abierta y devuelve el output nuevo tras esperar a que la terminal se quede en silencio. Teclas nombradas soportadas: " +
-        Object.keys(NAMED_KEYS).join(", ") +
-        ". También se pueden combinar con '+' (ej. 'down+down+enter'), o enviar texto literal (ej. un nombre de proyecto) seguido de una llamada aparte con 'enter'.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          sessionId: { type: "string", description: "ID devuelto por start_cli_session." },
-          keys: { type: "string", description: "Tecla nombrada, combinación con '+', o texto literal a escribir." },
-        },
-        required: ["sessionId", "keys"],
-      },
-    },
-    {
-      name: "read_output",
-      description:
-        "Lee el output nuevo de una sesión sin enviar ninguna tecla (útil para esperar más tiempo si el proceso está tardando, por ejemplo durante una instalación de dependencias).",
-      inputSchema: {
-        type: "object",
-        properties: {
-          sessionId: { type: "string" },
-          maxWaitMs: { type: "number", description: "Tope de espera en ms (default 20000)." },
-        },
-        required: ["sessionId"],
-      },
-    },
-    {
-      name: "close_session",
-      description: "Mata el proceso de una sesión CLI abierta y libera sus recursos.",
-      inputSchema: {
-        type: "object",
-        properties: { sessionId: { type: "string" } },
-        required: ["sessionId"],
-      },
-    },
-  ],
-}));
-
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-
-  try {
-    switch (name) {
-      case "start_cli_session":
-        return await handleStart(args);
-      case "send_key":
-        return await handleSendKey(args);
-      case "read_output":
-        return await handleReadOutput(args);
-      case "close_session":
-        return handleClose(args);
-      default:
-        throw new Error(`Herramienta no encontrada: ${name}`);
+server.tool(
+  "send_key",
+  "Envía una pulsación de teclado (o texto literal) a una sesión CLI abierta y devuelve el output nuevo tras esperar a que la terminal se quede en silencio. Teclas nombradas soportadas: " +
+    Object.keys(NAMED_KEYS).join(", ") +
+    ". También se pueden combinar con '+' (ej. 'down+down+enter'), o enviar texto literal (ej. un nombre de proyecto) seguido de una llamada aparte con 'enter'.",
+  {
+    sessionId: z.string().describe("ID devuelto por start_cli_session."),
+    keys: z.string().describe("Tecla nombrada, combinación con '+', o texto literal a escribir."),
+  },
+  async ({ sessionId, keys }) => {
+    const session = getSession(sessionId);
+    if (session.exited) {
+      throw new Error(
+        `La sesión ${sessionId} ya terminó (exitCode=${session.exitCode}). Usa close_session y abre una nueva si necesitas reintentar.`
+      );
     }
-  } catch (error) {
-    return { isError: true, content: [{ type: "text", text: error.message }] };
+
+    const payload = resolveKeys(keys);
+    session.proc.write(payload);
+
+    const { newOutput, exited, exitCode } = await waitForQuiet(session);
+
+    return {
+      content: [
+        { type: "text", text: JSON.stringify({ sessionId, output: newOutput, exited, exitCode }, null, 2) },
+      ],
+    };
   }
-});
+);
 
-// ---------------------------------------------------------------------------
-// Handlers
-// ---------------------------------------------------------------------------
+server.tool(
+  "read_output",
+  "Lee el output nuevo de una sesión sin enviar ninguna tecla (útil para esperar más tiempo si el proceso está tardando, por ejemplo durante una instalación de dependencias).",
+  {
+    sessionId: z.string(),
+    maxWaitMs: z
+      .number()
+      .optional()
+      .describe("Tope de espera en ms (default 20000)."),
+  },
+  async ({ sessionId, maxWaitMs }) => {
+    const session = getSession(sessionId);
+    const { newOutput, exited, exitCode } = await waitForQuiet(session, {
+      maxWaitMs: maxWaitMs ?? DEFAULT_MAX_WAIT_MS,
+    });
 
-async function handleStart({ command, args = [], cwd }) {
-  if (!ALLOWED_COMMANDS.has(command)) {
-    throw new Error(
-      `Comando no permitido: "${command}". Solo se permiten comandos oficiales de scaffolding/paquetería: ${[...ALLOWED_COMMANDS].join(", ")}`
-    );
+    return {
+      content: [
+        { type: "text", text: JSON.stringify({ sessionId, output: newOutput, exited, exitCode }, null, 2) },
+      ],
+    };
   }
+);
 
-  const proc = pty.spawn(command, args, {
-    name: "xterm-color",
-    cols: 100,
-    rows: 30,
-    cwd,
-    env: process.env,
-  });
-
-  const sessionId = randomUUID();
-  const session = { proc, rawOutput: "", lastReadIndex: 0, exited: false, exitCode: null };
-  sessions.set(sessionId, session);
-
-  proc.onData((data) => {
-    session.rawOutput += data;
-  });
-  proc.onExit(({ exitCode }) => {
-    session.exited = true;
-    session.exitCode = exitCode;
-  });
-
-  const { newOutput, exited, exitCode } = await waitForQuiet(session);
-
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify({ sessionId, output: newOutput, exited, exitCode }, null, 2),
-      },
-    ],
-  };
-}
-
-async function handleSendKey({ sessionId, keys }) {
-  const session = getSession(sessionId);
-  if (session.exited) {
-    throw new Error(`La sesión ${sessionId} ya terminó (exitCode=${session.exitCode}). Usa close_session y abre una nueva si necesitas reintentar.`);
-  }
-
-  const payload = resolveKeys(keys);
-  session.proc.write(payload);
-
-  const { newOutput, exited, exitCode } = await waitForQuiet(session);
-
-  return {
-    content: [
-      { type: "text", text: JSON.stringify({ sessionId, output: newOutput, exited, exitCode }, null, 2) },
-    ],
-  };
-}
-
-async function handleReadOutput({ sessionId, maxWaitMs }) {
-  const session = getSession(sessionId);
-  const { newOutput, exited, exitCode } = await waitForQuiet(session, {
-    maxWaitMs: maxWaitMs ?? DEFAULT_MAX_WAIT_MS,
-  });
-
-  return {
-    content: [
-      { type: "text", text: JSON.stringify({ sessionId, output: newOutput, exited, exitCode }, null, 2) },
-    ],
-  };
-}
-
-function handleClose({ sessionId }) {
-  const session = getSession(sessionId);
-  if (!session.exited) {
-    try {
-      session.proc.kill();
-    } catch {
-      // proceso ya muerto, ignorar
+server.tool(
+  "close_session",
+  "Mata el proceso de una sesión CLI abierta y libera sus recursos.",
+  {
+    sessionId: z.string(),
+  },
+  ({ sessionId }) => {
+    const session = getSession(sessionId);
+    if (!session.exited) {
+      try {
+        session.proc.kill();
+      } catch {
+        // proceso ya muerto, ignorar
+      }
     }
+    sessions.delete(sessionId);
+    return { content: [{ type: "text", text: JSON.stringify({ sessionId, closed: true }) }] };
   }
-  sessions.delete(sessionId);
-  return { content: [{ type: "text", text: JSON.stringify({ sessionId, closed: true }) }] };
-}
+);
 
 // ---------------------------------------------------------------------------
 // Arranque
