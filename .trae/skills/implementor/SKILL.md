@@ -30,6 +30,44 @@ Do **NOT** invoke this skill if:
 - No feature in `feature_list.json` is marked `in_progress` AND no human has given explicit implementation approval for a `not_started` one.
 - The matching `feature-XXX.md` does not exist or its task table is missing/empty (go back to feature-planner first).
 
+## MCP Requirement — mcp-cli-navigator (mandatory for ALL CLI execution)
+
+**Every** command this skill runs against a terminal — `pwd`, `git log`, `init.sh` runs, unit/integration/lint checks, build commands, test runners, **everything** in the Baseline, Implementation, and Handoff phases — MUST go through the `mcp-cli-navigator` MCP tools, never through a raw shell/bash tool.
+
+Reasoning: many build/test commands and interactive runners present prompts or require pty-level output capture. Rather than classifying "this command is interactive / this one isn't" case by case, this skill treats **all** CLI execution as potentially interactive and always drives it through the PTY-based navigator. A non-interactive command just means the session ends after `start_cli_session` with no `send_key` calls needed — there's no cost to defaulting to the navigator.
+
+Available tools and how to use them in this skill:
+
+- **`start_cli_session({ command, args, cwd })`** — Launches the command. `command` must be one of the officially allowlisted binaries (npm, npx, yarn, pnpm, bun, uv, pip, poetry, cargo, go, git, ng, django-admin, python, composer, symfony, rails, sam, cdk, spring, bash, sh, zsh, node, etc.). `cwd` MUST be an **absolute path**, and MUST be inside the current repository (repoRoot) unless the user explicitly asked otherwise. Returns `{ sessionId, output, exited, exitCode }` — `output` is the terminal screen once it settles.
+- **`send_key({ sessionId, keys })`** — Sends one interaction: a named key (`up`, `down`, `enter`, `space`, `tab`, `escape`, `ctrl-c`, `backspace`), a combo (`down+down+enter`), or literal text, followed by a separate `enter` call. Returns the new `output` since the last read.
+- **`read_output({ sessionId, maxWaitMs })`** — Reads more output without sending a key. Use this when a step is expected to take a while (dependency install, test suite, build) and you need to keep polling until it settles or exits.
+- **`close_session({ sessionId })`** — Kills the process and frees the session. Always call this after a session reaches `exited: true`, or if the implementation is aborted mid-way.
+
+**Operating loop for every CLI step:**
+
+1. Call `start_cli_session`. Read the returned `output` like a screenshot of the terminal.
+2. If `exited: true` already → the command was non-interactive (or failed); read `exitCode` and move on / handle the error. No `send_key` needed.
+3. If not exited → the `output` is a prompt or a long-running task. Decide the next key/keys from what's literally on screen (do not assume a fixed script of steps in advance — read, then act, one step at a time).
+4. Call `send_key` with that decision. Repeat from step 2 with the new `output`.
+5. If a step is clearly a long-running task (running tests, building, installing deps) rather than a prompt, use `read_output` (optionally with a larger `maxWaitMs`) instead of guessing a key to send.
+6. Once `exited: true`, call `close_session` and record the final `exitCode` for verification evidence.
+
+**Hard rules for MCP usage:**
+
+- Never fall back to a raw shell/bash execution tool for anything — the navigator is the **only** execution path for this skill. There are zero exceptions.
+- Never pre-script an entire multi-step interaction sequence and fire it blind. Read the actual `output` after every `start_cli_session`/`send_key` call before deciding the next key.
+- If `command` would fall outside the navigator's allowlist, surface it as a blocker rather than attempting to work around the allowlist.
+- If a session produces no new output and doesn't exit within the navigator's own timeout, call `read_output` once more; if still stuck, `close_session`, report the stall with the last known screen content, and ask the user how to proceed rather than retrying blindly.
+- If `mcp-cli-navigator` is not connected/available at all, do not fall back to a raw shell tool. Stop, tell the user the connector is required, and do not open any session.
+
+**Path Semantics (cwd rule):**
+
+Before any `start_cli_session` call, resolve the repository root using an allowlisted CLI command via `mcp-cli-navigator`:
+- Preferred: `git rev-parse --show-toplevel`
+- Fallback: `node -e "console.log(process.cwd())"` (only if git is unavailable)
+
+From that point on, treat every path as relative to repoRoot, and when calling `start_cli_session`, pass `cwd` as an **absolute path** derived from repoRoot.
+
 ## Pre-flight: Required Context Gathering
 
 Before writing any code, read **ALL** of the following artifacts in this order. If any artifact is empty or missing, record the gap in the session log and — if it blocks safe implementation — surface it as a blocker instead of guessing.
@@ -37,7 +75,7 @@ Before writing any code, read **ALL** of the following artifacts in this order. 
 1. `agent/state/session-handoff.md` — continuation context, known broken state, or prior unfinished work.
 2. `agent/state/progress.md` — last verified state, avoid regressing listed passing features.
 3. `agent/state/feature_list.json` — confirm the `in_progress` feature ID, its priority, the `single_active_feature` setting, and the `verification` field.
-4. Review recent commits with `git log --oneline -5`.
+4. Review recent commits via `mcp-cli-navigator` running `git log --oneline -5` (start_cli_session with `command: "git"`, `args: ["log", "--oneline", "-5"]`).
 5. `agent/docs/architecture.md` — layers, services, data flow, storage. If empty, you must treat missing architectural pieces as blockers rather than inventing them.
 6. `agent/docs/product.md` — feature areas, constraints, UI hints.
 7. `agent/docs/reliability.md` — golden journeys, restart rules. The verification you perform must align with (or explicitly reference) these.
@@ -49,12 +87,12 @@ Before writing any code, read **ALL** of the following artifacts in this order. 
 
 Run these steps **before** any coding. Do not skip them, even if you "already know" the repo.
 
-1. Confirm the working directory with `pwd`.
+1. Confirm the working directory via `mcp-cli-navigator` running `pwd` (start_cli_session with `command: "pwd"`, no args). Resolve repoRoot from this result (prefer `git rev-parse --show-toplevel` via the navigator).
 2. Read [session-handoff](./agent/state/session-handoff.md). If it indicates a prior session ended without completion, start from the continuation context it provides. Otherwise treat it as an empty/no-handoff marker.
 3. Read [progress](./agent/state/progress.md) for the latest verified state and next step.
 4. Read [feature_list](./agent/state/feature_list.json) and choose the highest-priority unfinished feature that is `in_progress` (or the one the human just approved).
-5. Review recent commits with `git log --oneline -5`.
-6. Run `./agent/verification/init.sh`.
+5. Review recent commits via `mcp-cli-navigator` running `git log --oneline -5`.
+6. Run `./agent/verification/init.sh` **exclusively via `mcp-cli-navigator`**: `start_cli_session({ command: "bash", args: ["./agent/verification/init.sh"], cwd: repoRootAbsolutePath })`. Follow the operating loop: poll with `read_output` until `exited: true`, then `close_session`. Record the final `exitCode`. If `exitCode !== 0`, the baseline is failing — fix first before any feature work.
 
 **HARD RULE:** If baseline verification (`init.sh`) is already failing, fix that first. Do **not** stack new feature work on top of a broken starting state. If the baseline is broken and you cannot safely repair it within a reasonable scope, surface it as a blocker.
 
@@ -72,6 +110,7 @@ Follow these during the Implementation phase. They are scope and quality guards,
 - Feature task plans live **ONLY** in `./agent/docs/features/feature-XXX.md` under the `## Implementation Tasks (Dynamic)` section. Never inside `feature_list.json`.
 - Every feature must have a task plan, and the task plan must be followed when implementing. If a task plan turns out to be wrong, amend it using the Dynamic Task Update Rules below; do not abandon it silently.
 - Do **not** delete any task plan row under the `## Implementation Tasks (Dynamic)` section, even if the task becomes obsolete — mark it `cancelled` with a reason instead.
+- **HARD RULE — Zero raw shell fallback:** For **any** command-line execution in any phase of this skill (Baseline, Implementation, Handoff), **never** use a raw shell/bash tool. `mcp-cli-navigator` is the sole and exclusive execution path. If the navigator is unavailable, surface unavailability instead of circumventing this rule.
 
 ## Dynamic Task Execution & Update Rules
 
@@ -92,7 +131,7 @@ You will execute tasks from the `## Implementation Tasks (Dynamic)` table in `ag
   - `check-architecture.sh` — checks the system architecture.
   - `e2e-check.sh` — checks the end-to-end functionality.
   Any one of them failing must make `init.sh` fail.
-- After implementing each task, run the narrowest applicable unit / integration / lint check available. Do not defer all verification to the end of the feature.
+- After implementing each task, run the narrowest applicable unit / integration / lint check available **exclusively via `mcp-cli-navigator`** (follow the operating loop, record `exitCode` as evidence). Do not defer all verification to the end of the feature.
 
 ## Definition Of Done
 
@@ -100,10 +139,11 @@ A feature is considered done when its status in [feature_list](./agent/state/fea
 
 - the target behavior is implemented (maps to the Acceptance Criteria in the feature doc).
 - the required verification actually ran — both the feature-specific `verification[]` steps from `feature_list.json` and the standard `init.sh` baseline.
-- after implementing the feature, run `init.sh` to verify the baseline. If not passing, the feature is **not** done.
+- after implementing the feature, run `init.sh` **via `mcp-cli-navigator`** to verify the baseline. If not passing (exitCode !== 0), the feature is **not** done.
 - evidence is recorded in [feature_list](./agent/state/feature_list.json) and [progress](./agent/state/progress.md).
 - the repository remains restartable from the standard startup path (`./agent/verification/init.sh`).
 - critical decisions are recorded in the [session log](./agent/state/logs) (`session-log-${id}.md`). If the session ends without completing the task, the same critical decisions plus next steps and blockers must also be surfaced in [session-handoff.md](./agent/state/session-handoff.md).
+- **every** CLI command executed in this session (baseline checks, tests, builds, `init.sh`, `git log`, `pwd`) was routed **exclusively** through `mcp-cli-navigator` tools — zero raw shell/bash fallback.
 
 ## End Of Session (Ralph Loop Phase 3 — Handoff)
 
@@ -117,5 +157,5 @@ Before ending a session (whether the feature completed or was interrupted), run 
 4. Update [progress](./agent/state/progress.md) with the new priority snapshot, verified state, and blocker (if any).
 5. Review [clean-state-checklist](./agent/state/clean-state-checklist.md).
 6. Record any unresolved risk or blocker in the session log and, if it outlives the session, also in `session-handoff.md`.
-7. Ensure the repo is restartable from [init.sh](./agent/verification/init.sh). If a public root wrapper is provided by this repo, ensure it also works and its path is documented either here or in [reliability.md](./agent/docs/reliability.md).
+7. Ensure the repo is restartable from [init.sh](./agent/verification/init.sh) **by running it via `mcp-cli-navigator`** and confirming `exited: true` with `exitCode === 0`. If a public root wrapper is provided by this repo, ensure it also works (run it via `mcp-cli-navigator`) and its path is documented either here or in [reliability.md](./agent/docs/reliability.md).
 8. Commit **only after** [progress](./agent/state/progress.md) and [feature_list](./agent/state/feature_list.json) are updated, the baseline is passing (if applicable), and the clean-state checklist is reviewed.
