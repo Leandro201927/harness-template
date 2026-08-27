@@ -47,7 +47,7 @@ User Request ──┐
    ┌──────────────────────────────────────────┐
    │  implementor SKILL                       │  IF: feature approved,
    │  [implementor/SKILL.md]                  │      status = in_progress
-   └──────────────────┬───────────────────────┘  EXECUTES: Ralph loop v0.1
+   └──────────────────┬───────────────────────┘  EXECUTES: Implementing loop
                       │                          (Baseline → Implementation → Handoff)
                       │                          FINAL STATE: status = passing
                       │
@@ -64,7 +64,7 @@ User Request ──┐
 | --------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | **Bootstrap a brand new project via OFFICIAL framework CLIs (empty scaffolding) inside `./src`** | Bootstraper | [.trae/skills/bootstraper/SKILL.md](./.trae/skills/bootstraper/SKILL.md)                                                                 |
 | Plan a new feature, write the spec, write the task plan         | Planner     | [.trae/skills/feature-planner/SKILL.md](./.trae/skills/feature-planner/SKILL.md)                                                         |
-| Execute the Ralph loop: Startup → Implementation → Handoff      | Implementor | [.trae/skills/implementor/SKILL.md](./.trae/skills/implementor/SKILL.md)                                                                 |
+| Execute the loop: Startup → Implementation → Handoff      | Implementor | [.trae/skills/implementor/SKILL.md](./.trae/skills/implementor/SKILL.md)                                                                 |
 | Define artifact semantics, shared rules, structure requirements | All roles   | This file — AGENTS.md (sections below)                                                                                                   |
 | Validate repository health via scripts                          | All roles   | `agent/verification/init.sh`                                                                                                             |
 

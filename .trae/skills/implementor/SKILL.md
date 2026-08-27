@@ -1,13 +1,13 @@
 ---
 name: "implementor"
-description: "Takes an approved feature (status:in_progress) through the Startup → Implementation → Handoff (Ralph loop v0.1). Invoked ONLY after feature-planner has spec'd the work and a human has approved the plan."
+description: "Takes an approved feature (status:in_progress) through the Startup → Implementation → Handoff (Implementing loop). Invoked ONLY after feature-planner has spec'd the work and a human has approved the plan."
 ---
 
 # Implementor Skill
 
 ## Purpose
 
-This skill is the **implementing agent**. It executes the "Ralph loop v0.1":
+This skill is the **implementing agent**. It executes the "implementing loop":
 
 ```
 Baseline (context retrieval) → Implementation (coding/testing) → Handoff (evaluation/commit)
@@ -83,7 +83,7 @@ Before writing any code, read **ALL** of the following artifacts in this order. 
 9. The active feature document: `agent/docs/features/feature-XXX.md` — especially the `Objective`, `Expected Behavior`, `Out of Scope`, `Acceptance Criteria`, `Minimum Expected Evidence`, and the full `Implementation Tasks (Dynamic)` table.
 10. Any additional document referenced inside the `verification` array of the active feature's `feature_list.json` entry.
 
-## Startup Workflow (Ralph Loop Phase 1 — Baseline)
+## Startup Workflow (Implementing Loop Phase 1 — Baseline)
 
 Run these steps **before** any coding. Do not skip them, even if you "already know" the repo.
 
@@ -145,7 +145,7 @@ A feature is considered done when its status in [feature_list](./agent/state/fea
 - critical decisions are recorded in the [session log](./agent/state/logs) (`session-log-${id}.md`). If the session ends without completing the task, the same critical decisions plus next steps and blockers must also be surfaced in [session-handoff.md](./agent/state/session-handoff.md).
 - **every** CLI command executed in this session (baseline checks, tests, builds, `init.sh`, `git log`, `pwd`) was routed **exclusively** through `mcp-cli-navigator` tools — zero raw shell/bash fallback.
 
-## End Of Session (Ralph Loop Phase 3 — Handoff)
+## End Of Session (Implementing Loop Phase 3 — Handoff)
 
 Before ending a session (whether the feature completed or was interrupted), run these 8 steps in order. Commit only after step 8 is satisfied.
 

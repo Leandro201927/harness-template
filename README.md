@@ -44,4 +44,4 @@ Following steps are only for human, not agent:
 
 3. Use the skill `/implementor` to implement the features of the product.
 
-4. Go to step 2 and repeat the Ralph loop.
+4. Go to step 2 and repeat the implementing loop.
